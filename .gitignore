@@ -1,0 +1,49 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.iml
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.local
+scripts/*.ps1
+!scripts/*.example.ps1
+
+# Logs
+*.log
+logs/
+
+# Java / Spring Boot
+backend/target/
+backend/build/
+backend/.gradle/
+backend/out/
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# Python / FastAPI
+ai-service/.venv/
+ai-service/venv/
+ai-service/**/__pycache__/
+ai-service/**/*.pyc
+ai-service/.pytest_cache/
+ai-service/.mypy_cache/
+ai-service/.ruff_cache/
+ai-service/*.egg-info/
+
+# Docker / runtime
+docker-data/
+tmp/
+temp/

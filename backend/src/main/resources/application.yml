@@ -1,0 +1,33 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: memoria-backend
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SUPABASE_JWT_ISSUER:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  store: ${APP_STORE:memory}
+  demo-caregiver-id: ${APP_DEMO_CAREGIVER_ID:00000000-0000-0000-0000-000000000001}
+  security:
+    enabled: ${APP_SECURITY_ENABLED:false}
+  ai-service-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
+  supabase:
+    db-url: ${SUPABASE_DB_URL:}
+    db-user: ${SUPABASE_DB_USER:postgres}
+    db-password: ${SUPABASE_DB_PASSWORD:}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
