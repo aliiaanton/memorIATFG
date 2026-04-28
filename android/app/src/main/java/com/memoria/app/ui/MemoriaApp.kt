@@ -1052,6 +1052,20 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
         )
     }
 
+    LaunchedEffect(Unit) {
+        runAsync(
+            action = { api.terminalStatus(deviceId) },
+            onSuccess = {
+                linked = true
+                status = it
+                statusMessage = "Dispositivo vinculado. Estado: ${it.sessionStatus}"
+            },
+            onError = {
+                statusMessage = "Introduce el codigo del cuidador."
+            }
+        )
+    }
+
     LaunchedEffect(linked) {
         while (linked) {
             refreshStatus()

@@ -22,6 +22,7 @@
 
 - Entrar en modo paciente.
 - Introducir codigo de vinculacion.
+- Cerrar y volver a abrir modo paciente para comprobar que recuerda el dispositivo vinculado.
 - Ver estado de espera.
 - Confirmar que cambia a sesion activa cuando el cuidador inicia sesion.
 - No enviar mensajes hasta que el estado mostrado sea `active`.
