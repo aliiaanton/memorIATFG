@@ -28,6 +28,7 @@
 - Enviar mensaje escrito.
 - Probar reconocimiento de voz si el emulador o movil lo permite.
 - Escuchar respuesta por TextToSpeech.
+- Confirmar que la voz TTS suena en espanol de Espana si el dispositivo tiene esa voz instalada.
 
 ## Conversacion y alertas
 
@@ -53,6 +54,7 @@
 - Si aparece error de conexion, comprobar `http://localhost:8080/api/health`.
 - Si el paciente no recibe respuesta, comprobar que el backend esta encendido y que el estado del modo paciente es `active`.
 - Si el reconocimiento de voz no escribe nada en el campo de texto, escribir una frase manualmente y pulsar **Enviar a memorIA**.
+- Si la voz suena con acento ingles, instalar/seleccionar una voz espanola en Android: **Ajustes > Sistema > Idiomas e introduccion de texto > Sintesis de voz > Motor preferido / Instalar datos de voz > Espanol (Espana)**.
 - Si el backend funciona pero la IA no, comprobar `http://localhost:8000/health`; el backend tiene respuesta local de respaldo para no bloquear la demo.
 
 ## Criterio de demo superada

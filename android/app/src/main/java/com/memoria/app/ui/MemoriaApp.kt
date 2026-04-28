@@ -74,6 +74,8 @@ private enum class AppScreen {
     Patient
 }
 
+private val SpanishSpainLocale: Locale = Locale.forLanguageTag("es-ES")
+
 @Composable
 fun MemoriaApp() {
     val api = remember { MemoriaApiClient() }
@@ -932,6 +934,30 @@ private fun statusLabel(status: String): String {
     }
 }
 
+private fun configureSpanishSpainTts(textToSpeech: TextToSpeech): Boolean {
+    val availability = textToSpeech.setLanguage(SpanishSpainLocale)
+    textToSpeech.setSpeechRate(0.92f)
+    textToSpeech.setPitch(1.0f)
+
+    if (availability == TextToSpeech.LANG_MISSING_DATA || availability == TextToSpeech.LANG_NOT_SUPPORTED) {
+        return false
+    }
+
+    val spanishVoice = textToSpeech.voices
+        ?.filter { voice ->
+            voice.locale.language == SpanishSpainLocale.language &&
+                voice.locale.country == SpanishSpainLocale.country
+        }
+        ?.sortedWith(compareBy({ it.isNetworkConnectionRequired }, { it.name }))
+        ?.firstOrNull()
+
+    if (spanishVoice != null) {
+        textToSpeech.voice = spanishVoice
+    }
+
+    return true
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
@@ -939,10 +965,11 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
     val deviceId = remember {
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "demo-device"
     }
+    var ttsReady by remember { mutableStateOf(false) }
     val textToSpeech = remember {
         TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                // Spanish voice if available; Android will fall back to device default otherwise.
+                ttsReady = true
             }
         }
     }
@@ -954,10 +981,15 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
     var statusMessage by rememberSaveable { mutableStateOf("Introduce el codigo del cuidador.") }
 
     DisposableEffect(Unit) {
-        textToSpeech.language = Locale.forLanguageTag("es-ES")
         onDispose {
             textToSpeech.stop()
             textToSpeech.shutdown()
+        }
+    }
+
+    LaunchedEffect(ttsReady) {
+        if (ttsReady) {
+            configureSpanishSpainTts(textToSpeech)
         }
     }
 
@@ -1004,6 +1036,7 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
     }
 
     fun speak(text: String) {
+        configureSpanishSpainTts(textToSpeech)
         textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "memoria-response")
     }
 
