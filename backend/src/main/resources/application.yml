@@ -24,6 +24,7 @@ app:
   demo-caregiver-id: ${APP_DEMO_CAREGIVER_ID:00000000-0000-0000-0000-000000000001}
   security:
     enabled: ${APP_SECURITY_ENABLED:false}
+  error-details: ${APP_ERROR_DETAILS:true}
   ai-service-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
   supabase:
     db-url: ${SUPABASE_DB_URL:}

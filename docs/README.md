@@ -10,6 +10,7 @@ Documentos previstos:
 
 - [Modelo de datos](modelo-datos.md).
 - [SQL inicial de Supabase](supabase-schema.sql).
+- [Reparacion no destructiva de Supabase](supabase-reparacion-mvp.sql).
 - [Endpoints del backend](endpoints-backend.md).
 - [Contrato entre Spring Boot y FastAPI](contrato-ai-service.md).
 - [Guia de ejecucion local](guia-ejecucion-local.md).

@@ -404,19 +404,22 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     patients = patients,
                     selectedPatient = selectedPatient,
                     pairingCode = pairingCode,
+                    statusMessage = statusMessage,
                     onSelectPatient = {
                         selectedPatient = it
                         pairingCode = ""
                         refreshAiConfig(it)
                         refreshSessions(it)
                     },
-                    onCreatePatient = { fullName, preferredName, notes ->
+                    onCreatePatient = { fullName, preferredName, notes, onSaved ->
                         statusMessage = "Creando paciente..."
                         runAsync(
                             action = { api.createPatient(fullName, preferredName, notes) },
                             onSuccess = {
+                                patients = listOf(it) + patients.filterNot { patient -> patient.id == it.id }
                                 selectedPatient = it
                                 statusMessage = "Paciente creado."
+                                onSaved()
                                 refreshPatients()
                                 refreshAiConfig(it)
                                 refreshSessions(it)
@@ -591,8 +594,9 @@ private fun PatientsTab(
     patients: List<PatientSummary>,
     selectedPatient: PatientSummary?,
     pairingCode: String,
+    statusMessage: String,
     onSelectPatient: (PatientSummary) -> Unit,
-    onCreatePatient: (String, String, String) -> Unit,
+    onCreatePatient: (String, String, String, () -> Unit) -> Unit,
     onDeletePatient: (PatientSummary) -> Unit,
     onGenerateCode: () -> Unit
 ) {
@@ -601,6 +605,8 @@ private fun PatientsTab(
     var notes by rememberSaveable { mutableStateOf("") }
 
     SectionTitle("Pacientes")
+    StatusBanner("Estado", statusMessage)
+    Spacer(modifier = Modifier.height(16.dp))
     if (patients.isEmpty()) {
         SimpleCard("Sin pacientes", "Crea un paciente para probar el flujo completo.")
     } else {
@@ -647,10 +653,11 @@ private fun PatientsTab(
     Spacer(modifier = Modifier.height(12.dp))
     Button(
         onClick = {
-            onCreatePatient(fullName.trim(), preferredName.trim(), notes.trim())
-            fullName = ""
-            preferredName = ""
-            notes = ""
+            onCreatePatient(fullName.trim(), preferredName.trim(), notes.trim()) {
+                fullName = ""
+                preferredName = ""
+                notes = ""
+            }
         },
         enabled = fullName.isNotBlank(),
         modifier = Modifier.fillMaxWidth()

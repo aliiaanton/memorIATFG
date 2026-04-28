@@ -2,6 +2,9 @@ package com.memoria.api;
 
 import java.time.OffsetDateTime;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,6 +16,11 @@ import com.memoria.service.NotFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
+    @Value("${app.error-details:true}")
+    private boolean errorDetailsEnabled;
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(NotFoundException exception) {
@@ -33,9 +41,15 @@ public class ApiExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, message);
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleUnexpected(Exception exception) {
+        LOGGER.error("Unexpected API error", exception);
+        String message = errorDetailsEnabled ? exception.getMessage() : "Internal server error";
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, message);
+    }
+
     private ResponseEntity<ApiError> error(HttpStatus status, String message) {
         return ResponseEntity.status(status)
                 .body(new ApiError(status.value(), message, OffsetDateTime.now()));
     }
 }
-

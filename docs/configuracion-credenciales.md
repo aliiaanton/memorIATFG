@@ -94,6 +94,24 @@ scripts/run-backend-supabase.ps1
 
 Y rellenar tus valores reales. Ese archivo queda ignorado por Git.
 
+## 4.1 Si los pacientes no se guardan o no aparecen
+
+Si la app permite rellenar un paciente pero no aparece en la lista, comprueba:
+
+```text
+GET http://localhost:8080/api/patients
+```
+
+Si devuelve `500`, lo mas probable es que Supabase tenga una version antigua o incompleta del esquema.
+
+Solucion:
+
+1. Abre Supabase.
+2. Entra en **SQL Editor**.
+3. Ejecuta `docs/supabase-reparacion-mvp.sql`.
+4. Reinicia Spring Boot.
+5. Vuelve a probar la creacion del paciente.
+
 ## 5. Arrancar AI service con Gemini
 
 ```powershell
