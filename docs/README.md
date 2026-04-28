@@ -17,4 +17,4 @@ Documentos previstos:
 - [Configuracion de credenciales](configuracion-credenciales.md).
 - [Guia de despliegue](despliegue.md).
 - [Checklist de pruebas del MVP](checklist-pruebas-mvp.md).
-- Notas para la memoria del TFG.
+- [Base para la memoria del TFG](memoria-tfg-base.md).
