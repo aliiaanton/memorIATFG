@@ -429,6 +429,22 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                             onError = { statusMessage = "Error creando paciente: $it" }
                         )
                     },
+                    onUpdatePatient = { patient, fullName, preferredName, notes, onSaved ->
+                        statusMessage = "Actualizando paciente..."
+                        runAsync(
+                            action = { api.updatePatient(patient.id, fullName, preferredName, notes) },
+                            onSuccess = {
+                                patients = patients.map { current -> if (current.id == it.id) it else current }
+                                selectedPatient = it
+                                statusMessage = "Paciente actualizado."
+                                onSaved()
+                                refreshPatients()
+                                refreshAiConfig(it)
+                                refreshSessions(it)
+                            },
+                            onError = { statusMessage = "Error actualizando paciente: $it" }
+                        )
+                    },
                     onDeletePatient = { patient ->
                         statusMessage = "Eliminando paciente..."
                         runAsync(
@@ -479,6 +495,18 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                             onError = { statusMessage = "Error creando regla: $it" }
                         )
                     },
+                    onUpdateLoopRule = { rule, question, answer ->
+                        val patient = selectedPatient ?: return@AiConfigTab
+                        statusMessage = "Actualizando regla de bucle..."
+                        runAsync(
+                            action = { api.updateLoopRule(patient.id, rule.id, question, answer, rule.active) },
+                            onSuccess = {
+                                statusMessage = "Regla actualizada."
+                                refreshAiConfig(patient)
+                            },
+                            onError = { statusMessage = "Error actualizando regla: $it" }
+                        )
+                    },
                     onCreateDangerousTopic = { term, redirect ->
                         val patient = selectedPatient ?: return@AiConfigTab
                         statusMessage = "Creando tema peligroso..."
@@ -491,6 +519,18 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                             onError = { statusMessage = "Error creando tema: $it" }
                         )
                     },
+                    onUpdateDangerousTopic = { topic, term, redirect ->
+                        val patient = selectedPatient ?: return@AiConfigTab
+                        statusMessage = "Actualizando tema peligroso..."
+                        runAsync(
+                            action = { api.updateDangerousTopic(patient.id, topic.id, term, redirect, topic.active) },
+                            onSuccess = {
+                                statusMessage = "Tema peligroso actualizado."
+                                refreshAiConfig(patient)
+                            },
+                            onError = { statusMessage = "Error actualizando tema: $it" }
+                        )
+                    },
                     onCreateSafeMemory = { title, content ->
                         val patient = selectedPatient ?: return@AiConfigTab
                         statusMessage = "Creando recuerdo seguro..."
@@ -501,6 +541,18 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                                 refreshAiConfig(patient)
                             },
                             onError = { statusMessage = "Error creando recuerdo: $it" }
+                        )
+                    },
+                    onUpdateSafeMemory = { memory, title, content ->
+                        val patient = selectedPatient ?: return@AiConfigTab
+                        statusMessage = "Actualizando recuerdo seguro..."
+                        runAsync(
+                            action = { api.updateSafeMemory(patient.id, memory.id, title, content, memory.active) },
+                            onSuccess = {
+                                statusMessage = "Recuerdo actualizado."
+                                refreshAiConfig(patient)
+                            },
+                            onError = { statusMessage = "Error actualizando recuerdo: $it" }
                         )
                     },
                     onDeleteLoopRule = { rule ->
@@ -599,12 +651,14 @@ private fun PatientsTab(
     statusMessage: String,
     onSelectPatient: (PatientSummary) -> Unit,
     onCreatePatient: (String, String, String, () -> Unit) -> Unit,
+    onUpdatePatient: (PatientSummary, String, String, String, () -> Unit) -> Unit,
     onDeletePatient: (PatientSummary) -> Unit,
     onGenerateCode: () -> Unit
 ) {
     var fullName by rememberSaveable { mutableStateOf("") }
     var preferredName by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
+    var editingPatient by remember { mutableStateOf<PatientSummary?>(null) }
 
     SectionTitle("Pacientes")
     StatusBanner("Estado", statusMessage)
@@ -622,6 +676,17 @@ private fun PatientsTab(
                 Button(onClick = { onSelectPatient(patient) }, modifier = Modifier.weight(1f)) {
                     Text("Seleccionar")
                 }
+                TextButton(
+                    onClick = {
+                        editingPatient = patient
+                        fullName = patient.fullName
+                        preferredName = patient.preferredName.orEmpty()
+                        notes = patient.notes.orEmpty()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Editar")
+                }
                 TextButton(onClick = { onDeletePatient(patient) }, modifier = Modifier.weight(1f)) {
                     Text("Eliminar")
                 }
@@ -629,7 +694,7 @@ private fun PatientsTab(
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
-    SectionTitle("Nuevo paciente")
+    SectionTitle(if (editingPatient == null) "Nuevo paciente" else "Editar paciente")
     OutlinedTextField(
         value = fullName,
         onValueChange = { fullName = it },
@@ -655,16 +720,37 @@ private fun PatientsTab(
     Spacer(modifier = Modifier.height(12.dp))
     Button(
         onClick = {
-            onCreatePatient(fullName.trim(), preferredName.trim(), notes.trim()) {
+            val onSaved = {
                 fullName = ""
                 preferredName = ""
                 notes = ""
+                editingPatient = null
+            }
+            val currentPatient = editingPatient
+            if (currentPatient == null) {
+                onCreatePatient(fullName.trim(), preferredName.trim(), notes.trim(), onSaved)
+            } else {
+                onUpdatePatient(currentPatient, fullName.trim(), preferredName.trim(), notes.trim(), onSaved)
             }
         },
         enabled = fullName.isNotBlank(),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Crear paciente")
+        Text(if (editingPatient == null) "Crear paciente" else "Guardar cambios")
+    }
+    if (editingPatient != null) {
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(
+            onClick = {
+                editingPatient = null
+                fullName = ""
+                preferredName = ""
+                notes = ""
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Cancelar edicion")
+        }
     }
     Spacer(modifier = Modifier.height(12.dp))
     Button(onClick = onGenerateCode, enabled = selectedPatient != null, modifier = Modifier.fillMaxWidth()) {
@@ -684,8 +770,11 @@ private fun AiConfigTab(
     safeMemories: List<SafeMemorySummary>,
     onRefresh: () -> Unit,
     onCreateLoopRule: (String, String) -> Unit,
+    onUpdateLoopRule: (LoopRuleSummary, String, String) -> Unit,
     onCreateDangerousTopic: (String, String) -> Unit,
+    onUpdateDangerousTopic: (DangerousTopicSummary, String, String) -> Unit,
     onCreateSafeMemory: (String, String) -> Unit,
+    onUpdateSafeMemory: (SafeMemorySummary, String, String) -> Unit,
     onDeleteLoopRule: (LoopRuleSummary) -> Unit,
     onDeleteDangerousTopic: (DangerousTopicSummary) -> Unit,
     onDeleteSafeMemory: (SafeMemorySummary) -> Unit
@@ -697,6 +786,9 @@ private fun AiConfigTab(
     var redirectHint by rememberSaveable { mutableStateOf("") }
     var memoryTitle by rememberSaveable { mutableStateOf("") }
     var memoryContent by rememberSaveable { mutableStateOf("") }
+    var editingLoopRule by remember { mutableStateOf<LoopRuleSummary?>(null) }
+    var editingDangerousTopic by remember { mutableStateOf<DangerousTopicSummary?>(null) }
+    var editingSafeMemory by remember { mutableStateOf<SafeMemorySummary?>(null) }
 
     SectionTitle("Configuracion IA")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -717,8 +809,20 @@ private fun AiConfigTab(
             SectionTitle("Bucles conversacionales")
             loopRules.forEach { rule ->
                 SimpleCard(rule.question, rule.answer)
-                TextButton(onClick = { onDeleteLoopRule(rule) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Eliminar regla")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            editingLoopRule = rule
+                            loopQuestion = rule.question
+                            loopAnswer = rule.answer
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Editar")
+                    }
+                    TextButton(onClick = { onDeleteLoopRule(rule) }, modifier = Modifier.weight(1f)) {
+                        Text("Eliminar")
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -738,22 +842,52 @@ private fun AiConfigTab(
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = {
-                    onCreateLoopRule(loopQuestion.trim(), loopAnswer.trim())
+                    val currentRule = editingLoopRule
+                    if (currentRule == null) {
+                        onCreateLoopRule(loopQuestion.trim(), loopAnswer.trim())
+                    } else {
+                        onUpdateLoopRule(currentRule, loopQuestion.trim(), loopAnswer.trim())
+                    }
                     loopQuestion = ""
                     loopAnswer = ""
+                    editingLoopRule = null
                 },
                 enabled = loopQuestion.isNotBlank() && loopAnswer.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Guardar bucle")
+                Text(if (editingLoopRule == null) "Guardar bucle" else "Guardar cambios")
+            }
+            if (editingLoopRule != null) {
+                TextButton(
+                    onClick = {
+                        editingLoopRule = null
+                        loopQuestion = ""
+                        loopAnswer = ""
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Cancelar edicion")
+                }
             }
         }
         1 -> {
             SectionTitle("Temas peligrosos")
             dangerousTopics.forEach { topic ->
                 SimpleCard(topic.term, topic.redirectHint ?: "Sin redireccion configurada")
-                TextButton(onClick = { onDeleteDangerousTopic(topic) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Eliminar tema")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            editingDangerousTopic = topic
+                            dangerousTerm = topic.term
+                            redirectHint = topic.redirectHint.orEmpty()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Editar")
+                    }
+                    TextButton(onClick = { onDeleteDangerousTopic(topic) }, modifier = Modifier.weight(1f)) {
+                        Text("Eliminar")
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -773,22 +907,52 @@ private fun AiConfigTab(
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = {
-                    onCreateDangerousTopic(dangerousTerm.trim(), redirectHint.trim())
+                    val currentTopic = editingDangerousTopic
+                    if (currentTopic == null) {
+                        onCreateDangerousTopic(dangerousTerm.trim(), redirectHint.trim())
+                    } else {
+                        onUpdateDangerousTopic(currentTopic, dangerousTerm.trim(), redirectHint.trim())
+                    }
                     dangerousTerm = ""
                     redirectHint = ""
+                    editingDangerousTopic = null
                 },
                 enabled = dangerousTerm.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Guardar tema peligroso")
+                Text(if (editingDangerousTopic == null) "Guardar tema peligroso" else "Guardar cambios")
+            }
+            if (editingDangerousTopic != null) {
+                TextButton(
+                    onClick = {
+                        editingDangerousTopic = null
+                        dangerousTerm = ""
+                        redirectHint = ""
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Cancelar edicion")
+                }
             }
         }
         2 -> {
             SectionTitle("Recuerdos seguros")
             safeMemories.forEach { memory ->
                 SimpleCard(memory.title, memory.content)
-                TextButton(onClick = { onDeleteSafeMemory(memory) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Eliminar recuerdo")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            editingSafeMemory = memory
+                            memoryTitle = memory.title
+                            memoryContent = memory.content
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Editar")
+                    }
+                    TextButton(onClick = { onDeleteSafeMemory(memory) }, modifier = Modifier.weight(1f)) {
+                        Text("Eliminar")
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -808,14 +972,32 @@ private fun AiConfigTab(
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = {
-                    onCreateSafeMemory(memoryTitle.trim(), memoryContent.trim())
+                    val currentMemory = editingSafeMemory
+                    if (currentMemory == null) {
+                        onCreateSafeMemory(memoryTitle.trim(), memoryContent.trim())
+                    } else {
+                        onUpdateSafeMemory(currentMemory, memoryTitle.trim(), memoryContent.trim())
+                    }
                     memoryTitle = ""
                     memoryContent = ""
+                    editingSafeMemory = null
                 },
                 enabled = memoryTitle.isNotBlank() && memoryContent.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Guardar recuerdo")
+                Text(if (editingSafeMemory == null) "Guardar recuerdo" else "Guardar cambios")
+            }
+            if (editingSafeMemory != null) {
+                TextButton(
+                    onClick = {
+                        editingSafeMemory = null
+                        memoryTitle = ""
+                        memoryContent = ""
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Cancelar edicion")
+                }
             }
         }
     }

@@ -12,7 +12,8 @@ import java.net.URL
 data class PatientSummary(
     val id: String,
     val fullName: String,
-    val preferredName: String?
+    val preferredName: String?,
+    val notes: String?
 )
 
 data class PairingCodeSummary(
@@ -92,12 +93,7 @@ class MemoriaApiClient(
     fun listPatients(): List<PatientSummary> {
         val array = JSONArray(request("GET", "/patients"))
         return List(array.length()) { index ->
-            val item = array.getJSONObject(index)
-            PatientSummary(
-                id = item.getString("id"),
-                fullName = item.getString("fullName"),
-                preferredName = item.optString("preferredName").ifBlank { null }
-            )
+            parsePatient(array.getJSONObject(index))
         }
     }
 
@@ -109,11 +105,18 @@ class MemoriaApiClient(
             .put("textSize", "large")
             .put("ttsSpeed", 1.0)
         val item = JSONObject(request("POST", "/patients", body))
-        return PatientSummary(
-            id = item.getString("id"),
-            fullName = item.getString("fullName"),
-            preferredName = item.optString("preferredName").ifBlank { null }
-        )
+        return parsePatient(item)
+    }
+
+    fun updatePatient(patientId: String, fullName: String, preferredName: String, notes: String = ""): PatientSummary {
+        val body = JSONObject()
+            .put("fullName", fullName)
+            .put("preferredName", preferredName)
+            .put("notes", notes)
+            .put("textSize", "large")
+            .put("ttsSpeed", 1.0)
+        val item = JSONObject(request("PUT", "/patients/$patientId", body))
+        return parsePatient(item)
     }
 
     fun deletePatient(patientId: String) {
@@ -123,13 +126,7 @@ class MemoriaApiClient(
     fun listLoopRules(patientId: String): List<LoopRuleSummary> {
         val array = JSONArray(request("GET", "/patients/$patientId/loop-rules"))
         return List(array.length()) { index ->
-            val item = array.getJSONObject(index)
-            LoopRuleSummary(
-                id = item.getString("id"),
-                question = item.getString("question"),
-                answer = item.getString("answer"),
-                active = item.getBoolean("active")
-            )
+            parseLoopRule(array.getJSONObject(index))
         }
     }
 
@@ -139,12 +136,22 @@ class MemoriaApiClient(
             .put("answer", answer)
             .put("active", true)
         val item = JSONObject(request("POST", "/patients/$patientId/loop-rules", body))
-        return LoopRuleSummary(
-            id = item.getString("id"),
-            question = item.getString("question"),
-            answer = item.getString("answer"),
-            active = item.getBoolean("active")
-        )
+        return parseLoopRule(item)
+    }
+
+    fun updateLoopRule(
+        patientId: String,
+        ruleId: String,
+        question: String,
+        answer: String,
+        active: Boolean
+    ): LoopRuleSummary {
+        val body = JSONObject()
+            .put("question", question)
+            .put("answer", answer)
+            .put("active", active)
+        val item = JSONObject(request("PUT", "/patients/$patientId/loop-rules/$ruleId", body))
+        return parseLoopRule(item)
     }
 
     fun deleteLoopRule(patientId: String, ruleId: String) {
@@ -154,13 +161,7 @@ class MemoriaApiClient(
     fun listDangerousTopics(patientId: String): List<DangerousTopicSummary> {
         val array = JSONArray(request("GET", "/patients/$patientId/dangerous-topics"))
         return List(array.length()) { index ->
-            val item = array.getJSONObject(index)
-            DangerousTopicSummary(
-                id = item.getString("id"),
-                term = item.getString("term"),
-                redirectHint = item.optString("redirectHint").ifBlank { null },
-                active = item.getBoolean("active")
-            )
+            parseDangerousTopic(array.getJSONObject(index))
         }
     }
 
@@ -170,12 +171,22 @@ class MemoriaApiClient(
             .put("redirectHint", redirectHint)
             .put("active", true)
         val item = JSONObject(request("POST", "/patients/$patientId/dangerous-topics", body))
-        return DangerousTopicSummary(
-            id = item.getString("id"),
-            term = item.getString("term"),
-            redirectHint = item.optString("redirectHint").ifBlank { null },
-            active = item.getBoolean("active")
-        )
+        return parseDangerousTopic(item)
+    }
+
+    fun updateDangerousTopic(
+        patientId: String,
+        topicId: String,
+        term: String,
+        redirectHint: String,
+        active: Boolean
+    ): DangerousTopicSummary {
+        val body = JSONObject()
+            .put("term", term)
+            .put("redirectHint", redirectHint)
+            .put("active", active)
+        val item = JSONObject(request("PUT", "/patients/$patientId/dangerous-topics/$topicId", body))
+        return parseDangerousTopic(item)
     }
 
     fun deleteDangerousTopic(patientId: String, topicId: String) {
@@ -185,13 +196,7 @@ class MemoriaApiClient(
     fun listSafeMemories(patientId: String): List<SafeMemorySummary> {
         val array = JSONArray(request("GET", "/patients/$patientId/safe-memories"))
         return List(array.length()) { index ->
-            val item = array.getJSONObject(index)
-            SafeMemorySummary(
-                id = item.getString("id"),
-                title = item.getString("title"),
-                content = item.getString("content"),
-                active = item.getBoolean("active")
-            )
+            parseSafeMemory(array.getJSONObject(index))
         }
     }
 
@@ -201,12 +206,22 @@ class MemoriaApiClient(
             .put("content", content)
             .put("active", true)
         val item = JSONObject(request("POST", "/patients/$patientId/safe-memories", body))
-        return SafeMemorySummary(
-            id = item.getString("id"),
-            title = item.getString("title"),
-            content = item.getString("content"),
-            active = item.getBoolean("active")
-        )
+        return parseSafeMemory(item)
+    }
+
+    fun updateSafeMemory(
+        patientId: String,
+        memoryId: String,
+        title: String,
+        content: String,
+        active: Boolean
+    ): SafeMemorySummary {
+        val body = JSONObject()
+            .put("title", title)
+            .put("content", content)
+            .put("active", active)
+        val item = JSONObject(request("PUT", "/patients/$patientId/safe-memories/$memoryId", body))
+        return parseSafeMemory(item)
     }
 
     fun deleteSafeMemory(patientId: String, memoryId: String) {
@@ -258,8 +273,8 @@ class MemoriaApiClient(
         val item = JSONObject(request("GET", "/patient-terminal/$deviceIdentifier/status"))
         return TerminalStatus(
             linked = item.getBoolean("linked"),
-            patientName = item.optString("patientName").ifBlank { null },
-            sessionId = item.optString("sessionId").ifBlank { null },
+            patientName = nullableString(item, "patientName"),
+            sessionId = nullableString(item, "sessionId"),
             sessionStatus = item.getString("sessionStatus")
         )
     }
@@ -281,7 +296,7 @@ class MemoriaApiClient(
             ConversationMessageSummary(
                 sender = item.getString("sender"),
                 content = item.getString("content"),
-                createdAt = item.optString("createdAt").ifBlank { null }
+                createdAt = nullableString(item, "createdAt")
             )
         }
     }
@@ -293,7 +308,7 @@ class MemoriaApiClient(
             SessionEventSummary(
                 eventType = item.getString("eventType"),
                 description = item.getString("description"),
-                createdAt = item.optString("createdAt").ifBlank { null }
+                createdAt = nullableString(item, "createdAt")
             )
         }
     }
@@ -303,11 +318,11 @@ class MemoriaApiClient(
         return List(array.length()) { index ->
             val item = array.getJSONObject(index)
             AlertSummary(
-                id = item.optString("id").ifBlank { null },
-                sessionId = item.optString("sessionId").ifBlank { null },
+                id = nullableString(item, "id"),
+                sessionId = nullableString(item, "sessionId"),
                 title = item.getString("title"),
                 message = item.getString("message"),
-                createdAt = item.optString("createdAt").ifBlank { null }
+                createdAt = nullableString(item, "createdAt")
             )
         }
     }
@@ -317,14 +332,57 @@ class MemoriaApiClient(
         return parseSession(item)
     }
 
+    private fun parsePatient(item: JSONObject): PatientSummary {
+        return PatientSummary(
+            id = item.getString("id"),
+            fullName = item.getString("fullName"),
+            preferredName = nullableString(item, "preferredName"),
+            notes = nullableString(item, "notes")
+        )
+    }
+
+    private fun parseLoopRule(item: JSONObject): LoopRuleSummary {
+        return LoopRuleSummary(
+            id = item.getString("id"),
+            question = item.getString("question"),
+            answer = item.getString("answer"),
+            active = item.getBoolean("active")
+        )
+    }
+
+    private fun parseDangerousTopic(item: JSONObject): DangerousTopicSummary {
+        return DangerousTopicSummary(
+            id = item.getString("id"),
+            term = item.getString("term"),
+            redirectHint = nullableString(item, "redirectHint"),
+            active = item.getBoolean("active")
+        )
+    }
+
+    private fun parseSafeMemory(item: JSONObject): SafeMemorySummary {
+        return SafeMemorySummary(
+            id = item.getString("id"),
+            title = item.getString("title"),
+            content = item.getString("content"),
+            active = item.getBoolean("active")
+        )
+    }
+
     private fun parseSession(item: JSONObject): SessionSummary {
         return SessionSummary(
             id = item.getString("id"),
             status = item.getString("status"),
-            startedAt = item.optString("startedAt").ifBlank { null },
-            endedAt = item.optString("endedAt").ifBlank { null },
-            createdAt = item.optString("createdAt").ifBlank { null }
+            startedAt = nullableString(item, "startedAt"),
+            endedAt = nullableString(item, "endedAt"),
+            createdAt = nullableString(item, "createdAt")
         )
+    }
+
+    private fun nullableString(item: JSONObject, key: String): String? {
+        if (!item.has(key) || item.isNull(key)) {
+            return null
+        }
+        return item.optString(key).ifBlank { null }
     }
 
     private fun request(method: String, path: String, body: JSONObject? = null): String {

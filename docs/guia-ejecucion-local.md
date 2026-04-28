@@ -71,21 +71,23 @@ Flujo:
 2. Pulsar **Comprobar backend**.
 3. Entrar en **Modo cuidador**.
 4. Crear un paciente desde la pestana **Pacientes**.
-5. Seleccionar el paciente.
-6. Entrar en **IA** y crear:
+5. Editar el paciente y guardar cambios para comprobar el flujo CRUD.
+6. Seleccionar el paciente.
+7. Entrar en **IA** y crear:
    - Un bucle conversacional.
    - Un tema peligroso.
    - Un recuerdo seguro.
-7. Volver a **Pacientes** y generar codigo de vinculacion.
-8. Volver y entrar en **Modo paciente**.
-9. Introducir el codigo generado.
-10. Volver a **Modo cuidador** e iniciar sesion.
-11. En **Modo paciente**, actualizar estado.
-12. Hablar o escribir un mensaje.
-13. Enviar a memorIA.
-14. Revisar respuesta y alertas en el modo cuidador.
-15. Entrar en **Diario**, actualizar sesiones y abrir el detalle de la sesion.
-16. Revisar transcripcion, eventos y alertas asociadas.
+8. Editar al menos una regla, un tema o un recuerdo y comprobar que se actualiza.
+9. Volver a **Pacientes** y generar codigo de vinculacion.
+10. Volver y entrar en **Modo paciente**.
+11. Introducir el codigo generado.
+12. Volver a **Modo cuidador** e iniciar sesion.
+13. En **Modo paciente**, actualizar estado.
+14. Hablar o escribir un mensaje.
+15. Enviar a memorIA.
+16. Revisar respuesta y alertas en el modo cuidador.
+17. Entrar en **Diario**, actualizar sesiones y abrir el detalle de la sesion.
+18. Revisar transcripcion, eventos y alertas asociadas.
 
 ## 4.1 Probar notificaciones Android
 

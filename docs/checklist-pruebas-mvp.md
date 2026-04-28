@@ -12,11 +12,16 @@
 - Abrir app y comprobar backend.
 - Entrar en modo cuidador.
 - Crear paciente.
+- Editar paciente y comprobar que los cambios se mantienen al actualizar.
 - Seleccionar paciente.
 - Crear regla de bucle.
+- Editar regla de bucle.
 - Crear tema peligroso.
+- Editar tema peligroso.
 - Crear recuerdo seguro.
+- Editar recuerdo seguro.
 - Generar codigo de vinculacion.
+- Eliminar una regla, tema o recuerdo de prueba si se quiere demostrar el borrado.
 
 ## Flujo paciente
 
