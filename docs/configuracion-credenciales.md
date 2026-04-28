@@ -20,9 +20,7 @@ Datos necesarios:
 SUPABASE_URL=https://<project-id>.supabase.co
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
-SUPABASE_DB_URL=postgresql://postgres:<password>@db.<project-id>.supabase.co:5432/postgres
-SUPABASE_DB_USER=postgres
-SUPABASE_DB_PASSWORD=...
+SUPABASE_DB_URL=postgresql://postgres.<project-id>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 Para este proyecto, el `project-id` actual es:
@@ -30,6 +28,14 @@ Para este proyecto, el `project-id` actual es:
 ```text
 fhjifzpopiegsyizzhbp
 ```
+
+Importante: el host directo `db.<project-id>.supabase.co` puede funcionar solo por IPv6. Si Windows o tu red no tienen IPv6, Spring Boot mostrara `Failed to obtain JDBC Connection`. Para el MVP local usa la connection string de **Session pooler**:
+
+1. Supabase Dashboard.
+2. Boton **Connect**.
+3. Seccion **Session pooler**.
+4. Copiar la URI.
+5. Sustituir `[YOUR-PASSWORD]` por la password de la base de datos.
 
 ## 3. Crear tablas en Supabase
 
@@ -63,9 +69,7 @@ Desde PowerShell, usando variables de entorno locales:
 ```powershell
 $env:APP_STORE="supabase"
 $env:APP_SECURITY_ENABLED="false"
-$env:SUPABASE_DB_URL="postgresql://postgres:<password>@db.<project-id>.supabase.co:5432/postgres"
-$env:SUPABASE_DB_USER="postgres"
-$env:SUPABASE_DB_PASSWORD="<password>"
+$env:SUPABASE_DB_URL="postgresql://postgres.<project-id>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require"
 $env:AI_SERVICE_BASE_URL="http://localhost:8000"
 
 cd backend
