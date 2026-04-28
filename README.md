@@ -54,6 +54,7 @@ La idea original completa se conserva en:
 - Modo paciente con entrada por voz y TextToSpeech.
 - Modo cuidador con formularios reales para pacientes, bucles, temas peligrosos y recuerdos seguros.
 - Diario con sesiones, transcripcion, eventos y alertas por sesion.
+- Tests unitarios del backend para la logica conversacional principal.
 
 ## Probar localmente
 

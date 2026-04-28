@@ -157,6 +157,11 @@ Limitacion actual:
 Pruebas tecnicas:
 
 - Compilacion del backend con Maven.
+- Tests unitarios del servicio conversacional con JUnit:
+  - deteccion de tema peligroso y generacion de alerta.
+  - deteccion de regla de bucle sin llamar a IA.
+  - respuesta IA cuando no hay regla configurada.
+  - rechazo de mensajes si la sesion no esta activa.
 - Compilacion de Android con Gradle.
 - Validacion de FastAPI con `py_compile`.
 - Comprobacion de `GET /api/health`.
