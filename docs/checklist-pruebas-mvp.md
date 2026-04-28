@@ -24,6 +24,7 @@
 - Introducir codigo de vinculacion.
 - Ver estado de espera.
 - Confirmar que cambia a sesion activa cuando el cuidador inicia sesion.
+- No enviar mensajes hasta que el estado mostrado sea `active`.
 - Enviar mensaje escrito.
 - Probar reconocimiento de voz si el emulador o movil lo permite.
 - Escuchar respuesta por TextToSpeech.
@@ -46,6 +47,13 @@
 - Revisar transcripcion.
 - Revisar eventos.
 - Revisar alertas asociadas.
+
+## Problemas frecuentes durante la demo
+
+- Si aparece error de conexion, comprobar `http://localhost:8080/api/health`.
+- Si el paciente no recibe respuesta, comprobar que el backend esta encendido y que el estado del modo paciente es `active`.
+- Si el reconocimiento de voz no escribe nada en el campo de texto, escribir una frase manualmente y pulsar **Enviar a memorIA**.
+- Si el backend funciona pero la IA no, comprobar `http://localhost:8000/health`; el backend tiene respuesta local de respaldo para no bloquear la demo.
 
 ## Criterio de demo superada
 

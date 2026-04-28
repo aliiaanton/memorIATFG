@@ -1094,6 +1094,11 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     onListen = { startVoiceInput() },
                     onSpeak = { speak(responseText) },
                     onSend = {
+                        if (status?.sessionStatus != "active") {
+                            statusMessage = "Espera a que el cuidador inicie la sesion."
+                            refreshStatus()
+                            return@PatientSessionView
+                        }
                         val sessionId = status?.sessionId
                         if (sessionId == null) {
                             statusMessage = "El cuidador debe iniciar una sesion."
@@ -1101,7 +1106,7 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
                         }
                         statusMessage = "Enviando mensaje..."
                         runAsync(
-                            action = { api.sendPatientMessage(deviceId, sessionId, patientText) },
+                            action = { api.sendPatientMessage(deviceId, sessionId, patientText.trim()) },
                             onSuccess = {
                                 responseText = it.responseText
                                 speak(it.responseText)
@@ -1182,7 +1187,11 @@ private fun PatientSessionView(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onSend, enabled = patientText.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = onSend,
+            enabled = patientText.isNotBlank() && state == "active",
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text("Enviar a memorIA")
         }
         Spacer(modifier = Modifier.height(8.dp))
