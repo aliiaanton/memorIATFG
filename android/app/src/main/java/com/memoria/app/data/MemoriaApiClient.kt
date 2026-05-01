@@ -13,6 +13,7 @@ data class PatientSummary(
     val id: String,
     val fullName: String,
     val preferredName: String?,
+    val birthYear: Int?,
     val notes: String?
 )
 
@@ -124,24 +125,36 @@ class MemoriaApiClient(
         }
     }
 
-    fun createPatient(fullName: String, preferredName: String, notes: String = ""): PatientSummary {
+    fun createPatient(fullName: String, preferredName: String, notes: String = "", birthYear: Int? = null): PatientSummary {
         val body = JSONObject()
             .put("fullName", fullName)
             .put("preferredName", preferredName)
             .put("notes", notes)
             .put("textSize", "large")
             .put("ttsSpeed", 1.0)
+        if (birthYear != null) {
+            body.put("birthYear", birthYear)
+        }
         val item = JSONObject(request("POST", "/patients", body))
         return parsePatient(item)
     }
 
-    fun updatePatient(patientId: String, fullName: String, preferredName: String, notes: String = ""): PatientSummary {
+    fun updatePatient(
+        patientId: String,
+        fullName: String,
+        preferredName: String,
+        notes: String = "",
+        birthYear: Int? = null
+    ): PatientSummary {
         val body = JSONObject()
             .put("fullName", fullName)
             .put("preferredName", preferredName)
             .put("notes", notes)
             .put("textSize", "large")
             .put("ttsSpeed", 1.0)
+        if (birthYear != null) {
+            body.put("birthYear", birthYear)
+        }
         val item = JSONObject(request("PUT", "/patients/$patientId", body))
         return parsePatient(item)
     }
@@ -381,6 +394,7 @@ class MemoriaApiClient(
             id = item.getString("id"),
             fullName = item.getString("fullName"),
             preferredName = nullableString(item, "preferredName"),
+            birthYear = if (item.has("birthYear") && !item.isNull("birthYear")) item.getInt("birthYear") else null,
             notes = nullableString(item, "notes")
         )
     }

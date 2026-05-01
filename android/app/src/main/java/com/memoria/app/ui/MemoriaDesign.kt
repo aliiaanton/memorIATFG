@@ -64,6 +64,15 @@ internal val MemoriaButtonShape = RoundedCornerShape(10.dp)
 
 internal enum class MemoriaGlyph {
     Heart,
+    Mail,
+    Eye,
+    EyeOff,
+    ArrowLeft,
+    Calendar,
+    Clock,
+    Document,
+    Person,
+    Save,
     Caregiver,
     Home,
     Patients,
@@ -292,6 +301,7 @@ internal fun MemoriaPanel(
     modifier: Modifier = Modifier,
     background: Color = Color.White,
     borderColor: Color = MemoriaCardBorder,
+    shadowElevation: Dp = 0.dp,
     contentPadding: PaddingValues = PaddingValues(20.dp),
     content: @Composable () -> Unit
 ) {
@@ -299,7 +309,8 @@ internal fun MemoriaPanel(
         modifier = modifier.fillMaxWidth(),
         shape = MemoriaPanelShape,
         color = background,
-        border = BorderStroke(1.dp, borderColor)
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = shadowElevation
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(contentPadding)) {
             content()
@@ -365,14 +376,15 @@ internal fun SecondaryActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    contentColor: Color = MemoriaMuted
+    contentColor: Color = MemoriaMuted,
+    height: Dp = 40.dp
 ) {
     TextButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             .background(MemoriaListSurface, MemoriaButtonShape)
-            .height(40.dp),
+            .height(height),
         shape = MemoriaButtonShape,
         colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
         contentPadding = PaddingValues(horizontal = 16.dp)
@@ -535,6 +547,100 @@ internal fun MemoriaLineIcon(
                     cubicTo(w * 0.88f, h * 0.42f, w * 0.8f, h * 0.58f, w * 0.5f, h * 0.82f)
                 }
                 strokedPath(path)
+            }
+            MemoriaGlyph.Mail -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = point(0.16f, 0.28f),
+                    size = Size(w * 0.68f, h * 0.5f),
+                    cornerRadius = CornerRadius(w * 0.06f, w * 0.06f),
+                    style = Stroke(width = stroke)
+                )
+                line(0.18f, 0.34f, 0.5f, 0.56f)
+                line(0.82f, 0.34f, 0.5f, 0.56f)
+            }
+            MemoriaGlyph.Eye -> {
+                val eye = Path().apply {
+                    moveTo(w * 0.14f, h * 0.5f)
+                    cubicTo(w * 0.28f, h * 0.26f, w * 0.72f, h * 0.26f, w * 0.86f, h * 0.5f)
+                    cubicTo(w * 0.72f, h * 0.74f, w * 0.28f, h * 0.74f, w * 0.14f, h * 0.5f)
+                    close()
+                }
+                strokedPath(eye)
+                drawCircle(color = color, radius = w * 0.1f, center = point(0.5f, 0.5f), style = Stroke(width = stroke))
+            }
+            MemoriaGlyph.EyeOff -> {
+                val eye = Path().apply {
+                    moveTo(w * 0.14f, h * 0.5f)
+                    cubicTo(w * 0.28f, h * 0.26f, w * 0.72f, h * 0.26f, w * 0.86f, h * 0.5f)
+                    cubicTo(w * 0.72f, h * 0.74f, w * 0.28f, h * 0.74f, w * 0.14f, h * 0.5f)
+                    close()
+                }
+                strokedPath(eye)
+                drawCircle(color = color, radius = w * 0.1f, center = point(0.5f, 0.5f), style = Stroke(width = stroke))
+                line(0.2f, 0.78f, 0.8f, 0.22f)
+            }
+            MemoriaGlyph.ArrowLeft -> {
+                line(0.72f, 0.5f, 0.24f, 0.5f)
+                line(0.42f, 0.28f, 0.24f, 0.5f)
+                line(0.42f, 0.72f, 0.24f, 0.5f)
+            }
+            MemoriaGlyph.Calendar -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = point(0.18f, 0.24f),
+                    size = Size(w * 0.64f, h * 0.58f),
+                    cornerRadius = CornerRadius(w * 0.06f, w * 0.06f),
+                    style = Stroke(width = stroke)
+                )
+                line(0.18f, 0.42f, 0.82f, 0.42f)
+                line(0.34f, 0.16f, 0.34f, 0.3f)
+                line(0.66f, 0.16f, 0.66f, 0.3f)
+            }
+            MemoriaGlyph.Clock -> {
+                drawCircle(color = color, radius = w * 0.34f, center = point(0.5f, 0.5f), style = Stroke(width = stroke))
+                line(0.5f, 0.3f, 0.5f, 0.52f)
+                line(0.5f, 0.52f, 0.66f, 0.62f)
+            }
+            MemoriaGlyph.Document -> {
+                val page = Path().apply {
+                    moveTo(w * 0.26f, h * 0.14f)
+                    lineTo(w * 0.58f, h * 0.14f)
+                    lineTo(w * 0.76f, h * 0.32f)
+                    lineTo(w * 0.76f, h * 0.86f)
+                    lineTo(w * 0.26f, h * 0.86f)
+                    close()
+                }
+                strokedPath(page)
+                line(0.58f, 0.14f, 0.58f, 0.34f)
+                line(0.58f, 0.34f, 0.76f, 0.34f)
+                line(0.38f, 0.5f, 0.64f, 0.5f)
+                line(0.38f, 0.64f, 0.64f, 0.64f)
+            }
+            MemoriaGlyph.Person -> {
+                drawCircle(color = color, radius = w * 0.14f, center = point(0.5f, 0.31f), style = Stroke(width = stroke))
+                val shoulders = Path().apply {
+                    moveTo(w * 0.22f, h * 0.78f)
+                    cubicTo(w * 0.22f, h * 0.56f, w * 0.36f, h * 0.5f, w * 0.5f, h * 0.5f)
+                    cubicTo(w * 0.64f, h * 0.5f, w * 0.78f, h * 0.56f, w * 0.78f, h * 0.78f)
+                }
+                strokedPath(shoulders)
+            }
+            MemoriaGlyph.Save -> {
+                val disk = Path().apply {
+                    moveTo(w * 0.2f, h * 0.18f)
+                    lineTo(w * 0.68f, h * 0.18f)
+                    lineTo(w * 0.8f, h * 0.3f)
+                    lineTo(w * 0.8f, h * 0.82f)
+                    lineTo(w * 0.2f, h * 0.82f)
+                    close()
+                }
+                strokedPath(disk)
+                line(0.34f, 0.18f, 0.34f, 0.42f)
+                line(0.34f, 0.42f, 0.64f, 0.42f)
+                line(0.34f, 0.82f, 0.34f, 0.6f)
+                line(0.34f, 0.6f, 0.66f, 0.6f)
+                line(0.66f, 0.6f, 0.66f, 0.82f)
             }
             MemoriaGlyph.Caregiver -> {
                 drawCircle(

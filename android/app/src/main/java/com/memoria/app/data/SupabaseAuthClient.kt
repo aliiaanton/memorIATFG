@@ -24,6 +24,17 @@ class SupabaseAuthClient(
     private val supabaseUrl: String = BuildConfig.SUPABASE_URL,
     private val anonKey: String = BuildConfig.SUPABASE_ANON_KEY
 ) {
+    companion object {
+        fun passwordValidationError(password: String): String? {
+            return when {
+                password.length < 8 -> "La contrasena debe tener al menos 8 caracteres."
+                password.none { it.isUpperCase() } -> "La contrasena debe incluir al menos una mayuscula."
+                password.none { it.isDigit() } -> "La contrasena debe incluir al menos un numero."
+                password.none { !it.isLetterOrDigit() } -> "La contrasena debe incluir al menos un caracter especial."
+                else -> null
+            }
+        }
+    }
 
     fun signIn(email: String, password: String): AuthSession {
         ensureConfigured()
@@ -35,6 +46,9 @@ class SupabaseAuthClient(
 
     fun signUp(email: String, password: String, fullName: String): AuthResult {
         ensureConfigured()
+        passwordValidationError(password)?.let { message ->
+            throw IllegalArgumentException(message)
+        }
         val data = JSONObject()
         if (fullName.isNotBlank()) {
             data.put("full_name", fullName)
@@ -50,6 +64,12 @@ class SupabaseAuthClient(
         } else {
             AuthResult.Authenticated(session)
         }
+    }
+
+    fun sendPasswordRecovery(email: String) {
+        ensureConfigured()
+        val body = JSONObject().put("email", email)
+        request("POST", "/auth/v1/recover", body)
     }
 
     private fun parseRequiredSession(response: String): AuthSession {

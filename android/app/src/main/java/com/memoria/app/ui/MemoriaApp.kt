@@ -15,6 +15,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -28,10 +29,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -51,7 +55,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -74,6 +80,11 @@ import com.memoria.app.data.SupabaseAuthClient
 import com.memoria.app.data.TerminalStatus
 import com.memoria.app.data.runAsync
 import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.Year
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private enum class AppScreen {
@@ -81,6 +92,13 @@ private enum class AppScreen {
     ModeSelector,
     Caregiver,
     Patient
+}
+
+private enum class PatientsView {
+    List,
+    New,
+    Edit,
+    Created
 }
 
 private val SpanishSpainLocale: Locale = Locale.forLanguageTag("es-ES")
@@ -109,12 +127,6 @@ fun MemoriaApp() {
                 authSession = session
                 api.updateAccessToken(session.accessToken)
                 screen = AppScreen.ModeSelector.name
-            },
-            onDemo = {
-                sessionStore.clear()
-                authSession = null
-                api.updateAccessToken(null)
-                screen = AppScreen.ModeSelector.name
             }
         )
         AppScreen.ModeSelector -> ModeSelectorScreen(
@@ -136,28 +148,32 @@ fun MemoriaApp() {
 private fun LoginScreen(
     api: MemoriaApiClient,
     authClient: SupabaseAuthClient,
-    onAuthenticated: (AuthSession) -> Unit,
-    onDemo: () -> Unit
+    onAuthenticated: (AuthSession) -> Unit
 ) {
     var isRegistering by rememberSaveable { mutableStateOf(false) }
     var fullName by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
-    var backendStatus by rememberSaveable { mutableStateOf("Sin comprobar") }
-    var authStatus by rememberSaveable { mutableStateOf("Inicia sesion con tu cuenta de cuidador.") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var authStatus by rememberSaveable { mutableStateOf("") }
     var authInProgress by rememberSaveable { mutableStateOf(false) }
+    val passwordValidationError = if (isRegistering) {
+        SupabaseAuthClient.passwordValidationError(password)
+    } else {
+        null
+    }
 
     MemoriaScreen {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 28.dp, vertical = 28.dp)
+                .padding(horizontal = 28.dp, vertical = 24.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            BrandMark(icon = MemoriaGlyph.Heart, size = 88.dp)
-            Spacer(modifier = Modifier.height(22.dp))
+            BrandMark(icon = MemoriaGlyph.Heart, size = 96.dp)
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "memorIA",
                 color = MemoriaInk,
@@ -167,127 +183,274 @@ private fun LoginScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Teleasistencia inteligente para cuidar con calma.",
+                text = "Cuidado inteligente y cercano",
                 color = MemoriaMuted,
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(26.dp))
+            Spacer(modifier = Modifier.height(34.dp))
             MemoriaPanel(
-                modifier = Modifier.widthIn(max = 460.dp),
-                contentPadding = PaddingValues(18.dp)
+                modifier = Modifier.widthIn(max = 448.dp),
+                shadowElevation = 12.dp,
+                contentPadding = PaddingValues(horizontal = 32.dp, vertical = 34.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SoftListRow {
-                        Column {
-                            Text("Conexion", color = MemoriaInk, fontWeight = FontWeight.Bold)
-                            Text(backendStatus, color = MemoriaMuted, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    SoftListRow {
-                        Column {
-                            Text("Cuenta", color = MemoriaInk, fontWeight = FontWeight.Bold)
-                            Text(authStatus, color = MemoriaMuted, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (isRegistering) "Crear Cuenta" else "Iniciar Sesion",
+                        color = MemoriaInk,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
                     if (isRegistering) {
-                        OutlinedTextField(
+                        AuthTextField(
+                            label = "Nombre completo",
                             value = fullName,
                             onValueChange = { fullName = it },
-                            label = { Text("Nombre del cuidador") },
-                            singleLine = true,
+                            placeholder = "Tu nombre",
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
-                    OutlinedTextField(
+                    AuthTextField(
+                        label = "Email",
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Email") },
-                        singleLine = true,
+                        placeholder = "tu@email.com",
+                        trailingGlyph = MemoriaGlyph.Mail,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
+                    Spacer(modifier = Modifier.height(24.dp))
+                    AuthTextField(
+                        label = "Contrasena",
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Contrasena") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
+                        placeholder = "********",
+                        trailingGlyph = if (passwordVisible) MemoriaGlyph.EyeOff else MemoriaGlyph.Eye,
+                        onTrailingClick = { passwordVisible = !passwordVisible },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    SecondaryActionButton(
-                        text = "Comprobar conexion",
-                        onClick = {
-                            backendStatus = "Comprobando conexion..."
-                            runAsync(
-                                action = { api.health() },
-                                onSuccess = { backendStatus = "Conexion lista" },
-                                onError = { backendStatus = "No se pudo conectar" }
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (!isRegistering) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    authInProgress = true
+                                    authStatus = "Enviando recuperacion..."
+                                    runAsync(
+                                        action = { authClient.sendPasswordRecovery(email.trim()) },
+                                        onSuccess = {
+                                            authInProgress = false
+                                            authStatus = "Te hemos enviado un email para recuperar la contrasena."
+                                        },
+                                        onError = {
+                                            authInProgress = false
+                                            authStatus = "Error de recuperacion: $it"
+                                        }
+                                    )
+                                },
+                                enabled = email.isNotBlank() && !authInProgress
+                            ) {
+                                Text("Olvidaste tu contrasena?", color = MemoriaSageDark, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    } else {
+                        PasswordRequirementHint(isValid = passwordValidationError == null)
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+                    if (authStatus.isNotBlank()) {
+                        AuthStatusText(authStatus)
+                        Spacer(modifier = Modifier.height(18.dp))
+                    } else {
+                        Spacer(modifier = Modifier.height(if (isRegistering) 0.dp else 24.dp))
+                    }
                     PrimaryActionButton(
-                        text = if (isRegistering) "Crear cuenta" else "Entrar",
+                        text = if (isRegistering) "Crear cuenta" else "Iniciar sesion",
                         onClick = {
-                            authInProgress = true
-                            authStatus = if (isRegistering) "Creando cuenta..." else "Iniciando sesion..."
-                            runAsync(
-                                action = {
-                                    val result = if (isRegistering) {
-                                        authClient.signUp(email.trim(), password, fullName.trim())
-                                    } else {
-                                        AuthResult.Authenticated(authClient.signIn(email.trim(), password))
-                                    }
-                                    if (result is AuthResult.Authenticated) {
-                                        api.updateAccessToken(result.session.accessToken)
-                                        val profileName = fullName
-                                            .ifBlank { result.session.email?.substringBefore("@").orEmpty() }
-                                            .ifBlank { email.substringBefore("@") }
-                                        api.saveCaregiverProfile(profileName)
-                                    }
-                                    result
-                                },
-                                onSuccess = { result ->
-                                    authInProgress = false
-                                    when (result) {
-                                        is AuthResult.Authenticated -> {
-                                            authStatus = "Sesion iniciada."
-                                            onAuthenticated(result.session)
+                            val signupPasswordError = if (isRegistering) {
+                                SupabaseAuthClient.passwordValidationError(password)
+                            } else {
+                                null
+                            }
+                            if (signupPasswordError != null) {
+                                authStatus = signupPasswordError
+                            } else {
+                                authInProgress = true
+                                authStatus = if (isRegistering) "Creando cuenta..." else "Iniciando sesion..."
+                                runAsync(
+                                    action = {
+                                        val result = if (isRegistering) {
+                                            authClient.signUp(email.trim(), password, fullName.trim())
+                                        } else {
+                                            AuthResult.Authenticated(authClient.signIn(email.trim(), password))
                                         }
-                                        is AuthResult.PendingConfirmation -> {
-                                            authStatus = "Cuenta creada. Confirma el email ${result.email} e inicia sesion."
-                                            isRegistering = false
+                                        if (result is AuthResult.Authenticated) {
+                                            api.updateAccessToken(result.session.accessToken)
+                                            val profileName = (if (isRegistering) fullName else "")
+                                                .ifBlank { result.session.email?.substringBefore("@").orEmpty() }
+                                                .ifBlank { email.substringBefore("@") }
+                                            api.saveCaregiverProfile(profileName)
                                         }
+                                        result
+                                    },
+                                    onSuccess = { result ->
+                                        authInProgress = false
+                                        when (result) {
+                                            is AuthResult.Authenticated -> {
+                                                authStatus = "Sesion iniciada."
+                                                onAuthenticated(result.session)
+                                            }
+                                            is AuthResult.PendingConfirmation -> {
+                                                authStatus = "Cuenta creada. Confirma el email ${result.email} e inicia sesion."
+                                                isRegistering = false
+                                            }
+                                        }
+                                    },
+                                    onError = {
+                                        authInProgress = false
+                                        authStatus = "Error de autenticacion: $it"
                                     }
-                                },
-                                onError = {
-                                    authInProgress = false
-                                    authStatus = "Error de autenticacion: $it"
-                                }
-                            )
+                                )
+                            }
                         },
                         enabled = email.isNotBlank() && password.isNotBlank() && !authInProgress &&
-                            (!isRegistering || fullName.isNotBlank()),
-                        modifier = Modifier.fillMaxWidth()
+                            (!isRegistering || (fullName.isNotBlank() && passwordValidationError == null)),
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 56.dp
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
                     TextButton(
                         onClick = {
                             isRegistering = !isRegistering
-                            authStatus = if (isRegistering) {
-                                "Crea una cuenta para guardar y consultar la informacion."
-                            } else {
-                                "Inicia sesion con tu cuenta de cuidador."
-                            }
+                            authStatus = ""
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (isRegistering) "Ya tengo cuenta" else "Crear cuenta nueva", color = MemoriaSageDark)
-                    }
-                    TextButton(onClick = onDemo, modifier = Modifier.fillMaxWidth()) {
-                        Text("Continuar sin cuenta", color = MemoriaMuted)
+                        Text(
+                            if (isRegistering) "Ya tienes cuenta? Inicia sesion" else "No tienes cuenta? Registrate",
+                            color = MemoriaSageDark,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(28.dp))
+            LoginFooter()
+        }
+    }
+}
+
+@Composable
+private fun AuthTextField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    trailingGlyph: MemoriaGlyph? = null,
+    onTrailingClick: (() -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text(
+            text = label,
+            color = MemoriaMuted,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = Color(0xFF8C9D9A)) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MemoriaInk),
+            visualTransformation = visualTransformation,
+            shape = MemoriaInnerShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = MemoriaInk,
+                unfocusedTextColor = MemoriaInk,
+                focusedContainerColor = MemoriaListSurface,
+                unfocusedContainerColor = MemoriaListSurface,
+                focusedBorderColor = MemoriaCardBorder,
+                unfocusedBorderColor = MemoriaCardBorder,
+                cursorColor = MemoriaSageDark
+            ),
+            trailingIcon = if (trailingGlyph == null) {
+                null
+            } else {
+                {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .then(if (onTrailingClick == null) Modifier else Modifier.clickable(onClick = onTrailingClick)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MemoriaLineIcon(
+                            glyph = trailingGlyph,
+                            color = MemoriaMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+        )
+    }
+}
+
+@Composable
+private fun PasswordRequirementHint(isValid: Boolean) {
+    Text(
+        text = "Minimo 8 caracteres, una mayuscula, un numero y un caracter especial.",
+        color = if (isValid) MemoriaSageDark else MemoriaMuted,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+    )
+}
+
+@Composable
+private fun AuthStatusText(text: String) {
+    val isError = text.startsWith("Error") || text.startsWith("No se") || text.contains("incorrectos", ignoreCase = true)
+    Text(
+        text = text,
+        color = if (isError) MemoriaWarningDark else MemoriaSageDark,
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun LoginFooter() {
+    Column(
+        modifier = Modifier.widthIn(max = 480.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Aplicacion de teleasistencia para personas con demencia/Alzheimer",
+            color = MemoriaMuted,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Privacidad", color = MemoriaMuted, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text("*", color = MemoriaMuted, fontSize = 12.sp)
+            Text("Terminos", color = MemoriaMuted, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text("*", color = MemoriaMuted, fontSize = 12.sp)
+            Text("Ayuda", color = MemoriaMuted, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
     }
 }
@@ -359,14 +522,21 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
     val tabs = listOf(
         CaregiverNavItem("Inicio", MemoriaGlyph.Home),
         CaregiverNavItem("Pacientes", MemoriaGlyph.Patients),
-        CaregiverNavItem("Asistente", MemoriaGlyph.Brain),
+        CaregiverNavItem("Config IA", MemoriaGlyph.Brain),
         CaregiverNavItem("Diario", MemoriaGlyph.Book)
     )
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var patientsView by rememberSaveable { mutableStateOf(PatientsView.List.name) }
     var patients by remember { mutableStateOf<List<PatientSummary>>(emptyList()) }
     var selectedPatient by remember { mutableStateOf<PatientSummary?>(null) }
+    var createdPatient by remember { mutableStateOf<PatientSummary?>(null) }
+    var editingPatient by remember { mutableStateOf<PatientSummary?>(null) }
+    var diaryDetailSession by remember { mutableStateOf<SessionSummary?>(null) }
     var patientDevices by remember { mutableStateOf<List<PatientDeviceSummary>>(emptyList()) }
     var activeSession by remember { mutableStateOf<SessionSummary?>(null) }
+    var selectedSessionDurationMinutes by rememberSaveable { mutableIntStateOf(20) }
+    var activeSessionEndsAtMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var nowMillis by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
     var alerts by remember { mutableStateOf<List<AlertSummary>>(emptyList()) }
     var loopRules by remember { mutableStateOf<List<LoopRuleSummary>>(emptyList()) }
     var dangerousTopics by remember { mutableStateOf<List<DangerousTopicSummary>>(emptyList()) }
@@ -377,6 +547,9 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
     var pairingCode by rememberSaveable { mutableStateOf("") }
     var statusMessage by rememberSaveable { mutableStateOf("Cargando datos...") }
     var notifiedAlertKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val currentPatientsView = PatientsView.valueOf(patientsView)
+    val patientFlowFullscreen = selectedTab == 1 && currentPatientsView != PatientsView.List
+    val diaryDetailFullscreen = selectedTab == 3 && diaryDetailSession != null
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -497,19 +670,207 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
         }
     }
 
+    LaunchedEffect(activeSession?.id, activeSessionEndsAtMillis) {
+        val session = activeSession
+        val endAt = activeSessionEndsAtMillis
+        if (session != null && endAt != null) {
+            while (activeSession?.id == session.id && activeSessionEndsAtMillis != null) {
+                nowMillis = System.currentTimeMillis()
+                val remainingMillis = endAt - nowMillis
+                if (remainingMillis <= 0L) {
+                    val status = activeSession?.status?.lowercase().orEmpty()
+                    if (status != "ended") {
+                        statusMessage = "Tiempo de sesion completado. Finalizando..."
+                        runAsync(
+                            action = { api.endSession(session.id) },
+                            onSuccess = {
+                                activeSession = it
+                                activeSessionEndsAtMillis = null
+                                statusMessage = "Sesion finalizada por duracion configurada."
+                                refreshAlerts()
+                                refreshSessions()
+                            },
+                            onError = { statusMessage = "Error finalizando sesion: $it" }
+                        )
+                    }
+                    break
+                }
+                delay(1000)
+            }
+        }
+    }
+
     Scaffold(
         containerColor = MemoriaBackground,
         topBar = {
-            CaregiverTopBar(onExit = onBack)
+            if (selectedTab == 1 && currentPatientsView == PatientsView.New) {
+                PatientFlowTopBar(
+                    title = "Nuevo Paciente",
+                    onBack = {
+                        patientsView = PatientsView.List.name
+                        statusMessage = if (patients.isEmpty()) "No hay pacientes registrados." else "Datos cargados."
+                    }
+                )
+            } else if (selectedTab == 1 && currentPatientsView == PatientsView.Edit) {
+                PatientFlowTopBar(
+                    title = "Editar Paciente",
+                    onBack = {
+                        patientsView = PatientsView.List.name
+                        editingPatient = null
+                        statusMessage = if (patients.isEmpty()) "No hay pacientes registrados." else "Datos cargados."
+                    }
+                )
+            } else if (selectedTab == 1 && currentPatientsView == PatientsView.Created) {
+                PatientFlowTopBar(
+                    title = "Paciente Creado",
+                    onBack = {
+                        patientsView = PatientsView.List.name
+                        statusMessage = "Paciente creado."
+                    }
+                )
+            } else if (diaryDetailFullscreen) {
+                PatientFlowTopBar(
+                    title = "Detalle de Sesion",
+                    onBack = {
+                        diaryDetailSession = null
+                        transcript = emptyList()
+                        events = emptyList()
+                    }
+                )
+            } else if (!patientFlowFullscreen) {
+                CaregiverTopBar(onExit = onBack)
+            }
         },
         bottomBar = {
-            CaregiverBottomBar(
-                items = tabs,
-                selectedIndex = selectedTab,
-                onSelect = { selectedTab = it }
-            )
+            if (!patientFlowFullscreen && !diaryDetailFullscreen) {
+                CaregiverBottomBar(
+                    items = tabs,
+                    selectedIndex = selectedTab,
+                    onSelect = {
+                        selectedTab = it
+                        if (it != 1) {
+                            patientsView = PatientsView.List.name
+                        }
+                    }
+                )
+            }
         }
     ) { padding ->
+        if (selectedTab == 1 && currentPatientsView == PatientsView.New) {
+            PatientFormScreen(
+                statusMessage = statusMessage,
+                patient = null,
+                onCancel = {
+                    patientsView = PatientsView.List.name
+                    statusMessage = if (patients.isEmpty()) "No hay pacientes registrados." else "Datos cargados."
+                },
+                onSave = { fullName, preferredName, age, notes ->
+                    val trimmedName = fullName.trim()
+                    statusMessage = "Creando paciente..."
+                    runAsync(
+                        action = {
+                            api.createPatient(
+                                fullName = trimmedName,
+                                preferredName = preferredName.trim(),
+                                notes = notes.trim(),
+                                birthYear = birthYearFromAge(age)
+                            )
+                        },
+                        onSuccess = {
+                            patients = listOf(it) + patients.filterNot { patient -> patient.id == it.id }
+                            selectedPatient = it
+                            createdPatient = it
+                            pairingCode = ""
+                            statusMessage = "Paciente creado."
+                            patientsView = PatientsView.Created.name
+                            refreshPatients()
+                            refreshAiConfig(it)
+                            refreshSessions(it)
+                            refreshPatientDevices(it)
+                        },
+                        onError = { statusMessage = "Error creando paciente: $it" }
+                    )
+                },
+                modifier = Modifier.padding(padding)
+            )
+            return@Scaffold
+        }
+        if (selectedTab == 1 && currentPatientsView == PatientsView.Edit) {
+            val patientToEdit = editingPatient ?: selectedPatient
+            PatientFormScreen(
+                statusMessage = statusMessage,
+                patient = patientToEdit,
+                onCancel = {
+                    patientsView = PatientsView.List.name
+                    editingPatient = null
+                    statusMessage = if (patients.isEmpty()) "No hay pacientes registrados." else "Datos cargados."
+                },
+                onSave = { fullName, preferredName, age, notes ->
+                    val patient = patientToEdit ?: return@PatientFormScreen
+                    statusMessage = "Actualizando paciente..."
+                    runAsync(
+                        action = {
+                            api.updatePatient(
+                                patient.id,
+                                fullName.trim(),
+                                preferredName.trim(),
+                                notes.trim(),
+                                birthYearFromAge(age)
+                            )
+                        },
+                        onSuccess = {
+                            patients = patients.map { current -> if (current.id == it.id) it else current }
+                            selectedPatient = it
+                            editingPatient = null
+                            statusMessage = "Paciente actualizado."
+                            patientsView = PatientsView.List.name
+                            refreshPatients()
+                            refreshAiConfig(it)
+                            refreshSessions(it)
+                            refreshPatientDevices(it)
+                        },
+                        onError = { statusMessage = "Error actualizando paciente: $it" }
+                    )
+                },
+                modifier = Modifier.padding(padding)
+            )
+            return@Scaffold
+        }
+        if (selectedTab == 1 && currentPatientsView == PatientsView.Created) {
+            PatientCreatedScreen(
+                patient = createdPatient ?: selectedPatient,
+                onConfigureAi = {
+                    val patient = createdPatient ?: selectedPatient ?: return@PatientCreatedScreen
+                    selectedPatient = patient
+                    patientsView = PatientsView.List.name
+                    selectedTab = 2
+                    statusMessage = "Configura la IA de ${patient.fullName}."
+                    refreshAiConfig(patient)
+                    refreshSessions(patient)
+                    refreshPatientDevices(patient)
+                },
+                onBackToPatients = {
+                    patientsView = PatientsView.List.name
+                    selectedTab = 1
+                    statusMessage = "Paciente creado."
+                },
+                modifier = Modifier.padding(padding)
+            )
+            return@Scaffold
+        }
+        diaryDetailSession?.let { detailSession ->
+            if (selectedTab == 3) {
+                DiarySessionDetailScreen(
+                    patient = selectedPatient,
+                    session = detailSession,
+                    transcript = transcript,
+                    events = events,
+                    alerts = alerts.filter { it.sessionId == detailSession.id },
+                    modifier = Modifier.padding(padding)
+                )
+                return@Scaffold
+            }
+        }
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -521,8 +882,12 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                 0 -> CaregiverHome(
                     selectedPatient = selectedPatient,
                     activeSession = activeSession,
+                    sessionDurationMinutes = selectedSessionDurationMinutes,
+                    sessionEndsAtMillis = activeSessionEndsAtMillis,
+                    nowMillis = nowMillis,
                     recentAlerts = alerts.take(2),
                     statusMessage = statusMessage,
+                    onDurationChange = { selectedSessionDurationMinutes = it },
                     onStart = {
                         val patient = selectedPatient ?: return@CaregiverHome
                         statusMessage = "Iniciando sesion..."
@@ -533,6 +898,8 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                             },
                             onSuccess = {
                                 activeSession = it
+                                activeSessionEndsAtMillis =
+                                    System.currentTimeMillis() + selectedSessionDurationMinutes * 60_000L
                                 statusMessage = "Sesion activa."
                             },
                             onError = { statusMessage = "Error iniciando sesion: $it" }
@@ -566,6 +933,7 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                             action = { api.endSession(session.id) },
                             onSuccess = {
                                 activeSession = it
+                                activeSessionEndsAtMillis = null
                                 statusMessage = "Sesion terminada."
                                 refreshAlerts()
                             },
@@ -587,39 +955,17 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                         refreshSessions(it)
                         refreshPatientDevices(it)
                     },
-                    onCreatePatient = { fullName, preferredName, notes, onSaved ->
-                        statusMessage = "Creando paciente..."
-                        runAsync(
-                            action = { api.createPatient(fullName, preferredName, notes) },
-                            onSuccess = {
-                                patients = listOf(it) + patients.filterNot { patient -> patient.id == it.id }
-                                selectedPatient = it
-                                statusMessage = "Paciente creado."
-                                onSaved()
-                                refreshPatients()
-                                refreshAiConfig(it)
-                                refreshSessions(it)
-                                refreshPatientDevices(it)
-                            },
-                            onError = { statusMessage = "Error creando paciente: $it" }
-                        )
+                    onNewPatient = {
+                        patientsView = PatientsView.New.name
+                        pairingCode = ""
+                        statusMessage = ""
                     },
-                    onUpdatePatient = { patient, fullName, preferredName, notes, onSaved ->
-                        statusMessage = "Actualizando paciente..."
-                        runAsync(
-                            action = { api.updatePatient(patient.id, fullName, preferredName, notes) },
-                            onSuccess = {
-                                patients = patients.map { current -> if (current.id == it.id) it else current }
-                                selectedPatient = it
-                                statusMessage = "Paciente actualizado."
-                                onSaved()
-                                refreshPatients()
-                                refreshAiConfig(it)
-                                refreshSessions(it)
-                                refreshPatientDevices(it)
-                            },
-                            onError = { statusMessage = "Error actualizando paciente: $it" }
-                        )
+                    onEditPatient = { patient ->
+                        selectedPatient = patient
+                        editingPatient = patient
+                        patientsView = PatientsView.Edit.name
+                        pairingCode = ""
+                        statusMessage = ""
                     },
                     onDeletePatient = { patient ->
                         statusMessage = "Eliminando paciente..."
@@ -629,6 +975,7 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                                 selectedPatient = null
                                 pairingCode = ""
                                 activeSession = null
+                                activeSessionEndsAtMillis = null
                                 loopRules = emptyList()
                                 dangerousTopics = emptyList()
                                 safeMemories = emptyList()
@@ -668,10 +1015,18 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     }
                 )
                 2 -> AiConfigTab(
+                    patients = patients,
                     selectedPatient = selectedPatient,
                     loopRules = loopRules,
                     dangerousTopics = dangerousTopics,
                     safeMemories = safeMemories,
+                    onSelectPatient = {
+                        selectedPatient = it
+                        pairingCode = ""
+                        refreshAiConfig(it)
+                        refreshSessions(it)
+                        refreshPatientDevices(it)
+                    },
                     onRefresh = { refreshAiConfig() },
                     onCreateLoopRule = { question, answer ->
                         val patient = selectedPatient ?: return@AiConfigTab
@@ -783,7 +1138,7 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                         refreshTranscript()
                     },
                     onLoadTranscript = {
-                        activeSession = it
+                        diaryDetailSession = it
                         refreshTranscript(it)
                     }
                 )
@@ -796,8 +1151,12 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
 private fun CaregiverHome(
     selectedPatient: PatientSummary?,
     activeSession: SessionSummary?,
+    sessionDurationMinutes: Int,
+    sessionEndsAtMillis: Long?,
+    nowMillis: Long,
     recentAlerts: List<AlertSummary>,
     statusMessage: String,
+    onDurationChange: (Int) -> Unit,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -829,7 +1188,15 @@ private fun CaregiverHome(
             }
             SessionInfoRow("Paciente", selectedPatient?.fullName ?: "-")
             SessionInfoRow("Inicio", activeSession?.startedAt?.let { formatTimestamp(it) } ?: "-")
-            SessionInfoRow("Duracion", if (activeSession?.endedAt == null) "-" else "Finalizada")
+            if (activeSession == null || sessionStatus.lowercase() == "ended") {
+                SessionDurationSelector(
+                    selectedMinutes = sessionDurationMinutes,
+                    onSelect = onDurationChange
+                )
+            } else {
+                SessionInfoRow("Duracion objetivo", "$sessionDurationMinutes min")
+                SessionInfoRow("Tiempo restante", formatRemainingTime(sessionEndsAtMillis, nowMillis))
+            }
             when (sessionStatus.lowercase()) {
                 "active" -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     SecondaryActionButton(
@@ -956,6 +1323,420 @@ private fun CaregiverHome(
 }
 
 @Composable
+private fun SessionDurationSelector(selectedMinutes: Int, onSelect: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "Duracion de sesion",
+            color = MemoriaMuted,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(15, 20, 30, 45).forEach { minutes ->
+                val selected = selectedMinutes == minutes
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clickable { onSelect(minutes) },
+                    shape = MemoriaButtonShape,
+                    color = if (selected) MemoriaSage else MemoriaListSurface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (selected) MemoriaSage else MemoriaCardBorder
+                    )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "$minutes min",
+                            color = if (selected) Color.White else MemoriaMuted,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = "La app finalizara la sesion automaticamente al cumplirse el tiempo elegido.",
+            color = MemoriaMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun PatientFlowTopBar(title: String, onBack: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp),
+        color = MemoriaSage
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconOnlyButton(
+                glyph = MemoriaGlyph.ArrowLeft,
+                contentColor = Color.White,
+                containerColor = Color.Transparent,
+                onClick = onBack,
+                size = 40.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun PatientFormScreen(
+    statusMessage: String,
+    patient: PatientSummary?,
+    onCancel: () -> Unit,
+    onSave: (String, String, Int, String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val initialAge = patient?.birthYear?.let { (Year.now().value - it).coerceIn(1, 120).toString() }.orEmpty()
+    var fullName by remember(patient?.id) { mutableStateOf(patient?.fullName.orEmpty()) }
+    var preferredName by remember(patient?.id) { mutableStateOf(patient?.preferredName.orEmpty()) }
+    var age by remember(patient?.id) { mutableStateOf(initialAge) }
+    var notes by remember(patient?.id) { mutableStateOf(patient?.notes.orEmpty()) }
+    val parsedAge = age.toIntOrNull()
+    val ageValid = parsedAge != null && parsedAge in 1..120
+    val isSaving = statusMessage == "Creando paciente..." || statusMessage == "Actualizando paciente..."
+    val canSave = fullName.isNotBlank() && preferredName.isNotBlank() && ageValid && !isSaving
+    val actionText = if (patient == null) "Guardar Paciente" else "Guardar Cambios"
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BrandMark(icon = MemoriaGlyph.Person, size = 80.dp)
+        Spacer(modifier = Modifier.height(26.dp))
+        MemoriaPanel(
+            modifier = Modifier.widthIn(max = 560.dp),
+            contentPadding = PaddingValues(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Informacion Basica",
+                        color = MemoriaInk,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                PatientInputField(
+                    label = "Nombre completo *",
+                    placeholder = "Ej: Maria Garcia Lopez",
+                    value = fullName,
+                    onValueChange = { fullName = it },
+                    icon = MemoriaGlyph.Person
+                )
+                PatientInputField(
+                    label = "Nombre preferido *",
+                    placeholder = "Ej: Maria",
+                    value = preferredName,
+                    onValueChange = { preferredName = it },
+                    icon = MemoriaGlyph.Heart
+                )
+                PatientInputField(
+                    label = "Edad *",
+                    placeholder = "Ej: 78",
+                    value = age,
+                    onValueChange = { value -> age = value.filter { it.isDigit() }.take(3) },
+                    icon = MemoriaGlyph.Calendar
+                )
+                if (age.isNotBlank() && !ageValid) {
+                    Text(
+                        text = "Introduce una edad valida entre 1 y 120.",
+                        color = MemoriaWarningDark,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        MemoriaPanel(
+            modifier = Modifier.widthIn(max = 560.dp),
+            contentPadding = PaddingValues(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MemoriaLineIcon(MemoriaGlyph.Document, MemoriaMuted, Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Notas Adicionales",
+                        color = MemoriaInk,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "Informacion importante sobre el paciente que pueda ayudar en las sesiones",
+                    color = MemoriaMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                PatientInputField(
+                    label = "",
+                    placeholder = "Ej: Le gusta hablar sobre su familia, prefiere ser llamado por su apodo, es muy aficionado a la jardineria...",
+                    value = notes,
+                    onValueChange = { notes = it },
+                    icon = null,
+                    singleLine = false,
+                    height = 122.dp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        PatientTipPanel(
+            text = "Despues de crear el paciente, podras configurar la IA para personalizar sus conversaciones.",
+            modifier = Modifier.widthIn(max = 560.dp)
+        )
+        if (statusMessage.startsWith("Error")) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = statusMessage,
+                color = MemoriaWarningDark,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Row(
+            modifier = Modifier.widthIn(max = 560.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SecondaryActionButton(
+                text = "Cancelar",
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                height = 48.dp
+            )
+            PrimaryActionButton(
+                text = if (isSaving) "Guardando..." else actionText,
+                icon = MemoriaGlyph.Save,
+                onClick = { parsedAge?.let { onSave(fullName, preferredName, it, notes) } },
+                enabled = canSave,
+                modifier = Modifier.weight(1f),
+                height = 48.dp
+            )
+        }
+    }
+}
+
+@Composable
+private fun PatientInputField(
+    label: String,
+    placeholder: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    icon: MemoriaGlyph?,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+    height: Dp = 56.dp
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (label.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    MemoriaLineIcon(icon, MemoriaMuted, Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = label,
+                    color = MemoriaMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = Color(0xFF8C9D9A), style = MaterialTheme.typography.bodySmall) },
+            singleLine = singleLine,
+            minLines = if (singleLine) 1 else 4,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MemoriaInk),
+            shape = MemoriaInnerShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = MemoriaInk,
+                unfocusedTextColor = MemoriaInk,
+                focusedContainerColor = MemoriaListSurface,
+                unfocusedContainerColor = MemoriaListSurface,
+                focusedBorderColor = MemoriaCardBorder,
+                unfocusedBorderColor = MemoriaCardBorder,
+                cursorColor = MemoriaSageDark
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+        )
+    }
+}
+
+@Composable
+private fun PatientCreatedScreen(
+    patient: PatientSummary?,
+    onConfigureAi: () -> Unit,
+    onBackToPatients: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val displayName = patientDisplayName(patient)
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp, vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        BrandMark(icon = MemoriaGlyph.Check, size = 80.dp)
+        Spacer(modifier = Modifier.height(26.dp))
+        Text(
+            text = "Paciente creado!",
+            color = MemoriaInk,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(displayName, color = MemoriaMuted, style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("ha sido anadido correctamente", color = MemoriaMuted, style = MaterialTheme.typography.bodySmall)
+        Spacer(modifier = Modifier.height(30.dp))
+        MemoriaPanel(
+            modifier = Modifier.widthIn(max = 372.dp),
+            shadowElevation = 12.dp,
+            contentPadding = PaddingValues(26.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Siguiente paso",
+                    color = MemoriaInk,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Configura la IA para personalizar las conversaciones",
+                    color = MemoriaMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(22.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .clickable(onClick = onConfigureAi),
+                        shape = MemoriaInnerShape,
+                        color = MemoriaSage
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(48.dp),
+                                shape = MemoriaInnerShape,
+                                color = Color.White.copy(alpha = 0.16f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    MemoriaLineIcon(MemoriaGlyph.Brain, Color.White, Modifier.size(28.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "Configurar IA Ahora",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Define preguntas, temas y recuerdos",
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            MemoriaLineIcon(MemoriaGlyph.ChevronRight, Color.White, Modifier.size(28.dp))
+                        }
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 10.dp),
+                        shape = RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
+                        color = MemoriaWarning
+                    ) {
+                        Text(
+                            text = "Recomendado",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                SecondaryActionButton(
+                    text = "Volver a Pacientes",
+                    onClick = onBackToPatients,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 54.dp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(28.dp))
+        PatientTipPanel(
+            text = "Puedes configurar la IA en cualquier momento desde la pestana Config IA",
+            modifier = Modifier.widthIn(max = 372.dp)
+        )
+    }
+}
+
+@Composable
+private fun PatientTipPanel(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MemoriaInnerShape,
+        color = MemoriaSagePale,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MemoriaCardBorder)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Consejo:", color = MemoriaInk, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = text,
+                color = MemoriaInk,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun PatientsTab(
     patients: List<PatientSummary>,
     selectedPatient: PatientSummary?,
@@ -963,29 +1744,19 @@ private fun PatientsTab(
     pairingCode: String,
     statusMessage: String,
     onSelectPatient: (PatientSummary) -> Unit,
-    onCreatePatient: (String, String, String, () -> Unit) -> Unit,
-    onUpdatePatient: (PatientSummary, String, String, String, () -> Unit) -> Unit,
+    onNewPatient: () -> Unit,
+    onEditPatient: (PatientSummary) -> Unit,
     onDeletePatient: (PatientSummary) -> Unit,
     onGenerateCode: (PatientSummary) -> Unit,
     onRefreshDevices: () -> Unit,
     onUnlinkDevice: (PatientDeviceSummary) -> Unit
 ) {
-    var fullName by rememberSaveable { mutableStateOf("") }
-    var preferredName by rememberSaveable { mutableStateOf("") }
-    var notes by rememberSaveable { mutableStateOf("") }
-    var formVisible by rememberSaveable { mutableStateOf(false) }
-    var editingPatient by remember { mutableStateOf<PatientSummary?>(null) }
-
     Row(verticalAlignment = Alignment.CenterVertically) {
         ScreenHeading("Pacientes", modifier = Modifier.weight(1f))
         IconOnlyButton(
             glyph = MemoriaGlyph.Plus,
             onClick = {
-                editingPatient = null
-                fullName = ""
-                preferredName = ""
-                notes = ""
-                formVisible = true
+                onNewPatient()
             },
             containerColor = MemoriaSage,
             contentColor = Color.White,
@@ -996,11 +1767,18 @@ private fun PatientsTab(
     if (patients.isEmpty()) {
         MemoriaPanel {
             Text("Sin pacientes registrados", color = MemoriaInk, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Pulsa el boton + para anadir el primer paciente.", color = MemoriaMuted)
         }
     } else {
         patients.forEach { patient ->
             val linked = patient.id == selectedPatient?.id && patientDevices.isNotEmpty()
-            MemoriaPanel(contentPadding = PaddingValues(18.dp)) {
+            val selected = patient.id == selectedPatient?.id
+            MemoriaPanel(
+                background = if (selected) MemoriaSagePale else Color.White,
+                borderColor = if (selected) MemoriaSage else MemoriaCardBorder,
+                contentPadding = PaddingValues(18.dp)
+            ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -1022,9 +1800,13 @@ private fun PatientsTab(
                             )
                         }
                         PillBadge(
-                            text = if (linked) "Vinculado" else "No vinculado",
-                            background = if (linked) MemoriaSagePale else MemoriaListSurface,
-                            contentColor = MemoriaMuted
+                            text = when {
+                                selected -> "Seleccionado"
+                                linked -> "Vinculado"
+                                else -> "No vinculado"
+                            },
+                            background = if (selected) Color.White else if (linked) MemoriaSagePale else MemoriaListSurface,
+                            contentColor = if (selected) MemoriaSageDark else MemoriaMuted
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1033,11 +1815,7 @@ private fun PatientsTab(
                             icon = MemoriaGlyph.Edit,
                             onClick = {
                                 onSelectPatient(patient)
-                                editingPatient = patient
-                                fullName = patient.fullName
-                                preferredName = patient.preferredName.orEmpty()
-                                notes = patient.notes.orEmpty()
-                                formVisible = true
+                                onEditPatient(patient)
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -1060,72 +1838,6 @@ private fun PatientsTab(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-        }
-    }
-    if (formVisible) {
-        Spacer(modifier = Modifier.height(8.dp))
-        MemoriaPanel {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = if (editingPatient == null) "Nuevo paciente" else "Editar paciente",
-                    color = MemoriaInk,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                OutlinedTextField(
-                    value = fullName,
-                    onValueChange = { fullName = it },
-                    label = { Text("Nombre completo") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = preferredName,
-                    onValueChange = { preferredName = it },
-                    label = { Text("Nombre preferido") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Indicaciones de cuidado") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SecondaryActionButton(
-                        text = "Cancelar",
-                        onClick = {
-                            formVisible = false
-                            editingPatient = null
-                            fullName = ""
-                            preferredName = ""
-                            notes = ""
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    PrimaryActionButton(
-                        text = if (editingPatient == null) "Crear" else "Guardar",
-                        onClick = {
-                            val onSaved = {
-                                fullName = ""
-                                preferredName = ""
-                                notes = ""
-                                editingPatient = null
-                                formVisible = false
-                            }
-                            val currentPatient = editingPatient
-                            if (currentPatient == null) {
-                                onCreatePatient(fullName.trim(), preferredName.trim(), notes.trim(), onSaved)
-                            } else {
-                                onUpdatePatient(currentPatient, fullName.trim(), preferredName.trim(), notes.trim(), onSaved)
-                            }
-                        },
-                        enabled = fullName.isNotBlank(),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
         }
     }
     if (pairingCode.isNotBlank()) {
@@ -1200,11 +1912,79 @@ private fun PatientsTab(
 }
 
 @Composable
+private fun SelectedPatientConfigCard(
+    patient: PatientSummary,
+    patients: List<PatientSummary>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onSelectPatient: (PatientSummary) -> Unit
+) {
+    MemoriaPanel(
+        background = MemoriaSagePale,
+        borderColor = MemoriaSageSoft,
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BrandMark(icon = MemoriaGlyph.Brain, size = 38.dp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Configurando para ${patientDisplayName(patient)}",
+                    color = MemoriaSageDark,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Define respuestas, temas peligrosos y recuerdos seguros para personalizar las conversaciones",
+                    color = MemoriaMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            MemoriaLineIcon(MemoriaGlyph.ChevronRight, MemoriaSageDark, Modifier.size(22.dp))
+        }
+        if (expanded) {
+            Spacer(modifier = Modifier.height(12.dp))
+            patients.filterNot { it.id == patient.id }.forEach { otherPatient ->
+                SoftListRow(onClick = { onSelectPatient(otherPatient) }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemoriaLineIcon(MemoriaGlyph.Person, MemoriaMuted, Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(otherPatient.fullName, color = MemoriaInk, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = otherPatient.preferredName?.takeIf { it.isNotBlank() } ?: "Paciente registrado",
+                                color = MemoriaMuted,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (patients.size <= 1) {
+                Text(
+                    text = "No hay otros pacientes registrados.",
+                    color = MemoriaMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AiConfigTab(
+    patients: List<PatientSummary>,
     selectedPatient: PatientSummary?,
     loopRules: List<LoopRuleSummary>,
     dangerousTopics: List<DangerousTopicSummary>,
     safeMemories: List<SafeMemorySummary>,
+    onSelectPatient: (PatientSummary) -> Unit,
     onRefresh: () -> Unit,
     onCreateLoopRule: (String, String) -> Unit,
     onUpdateLoopRule: (LoopRuleSummary, String, String) -> Unit,
@@ -1226,6 +2006,7 @@ private fun AiConfigTab(
     var editingLoopRule by remember { mutableStateOf<LoopRuleSummary?>(null) }
     var editingDangerousTopic by remember { mutableStateOf<DangerousTopicSummary?>(null) }
     var editingSafeMemory by remember { mutableStateOf<SafeMemorySummary?>(null) }
+    var patientPickerOpen by rememberSaveable { mutableStateOf(false) }
 
     fun clearLoopEditor() {
         editingLoopRule = null
@@ -1249,7 +2030,7 @@ private fun AiConfigTab(
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        ScreenHeading("Asistente", modifier = Modifier.weight(1f))
+        ScreenHeading("Config IA", modifier = Modifier.weight(1f))
         TextButton(onClick = onRefresh) {
             Text("Actualizar", color = MemoriaSageDark)
         }
@@ -1260,9 +2041,29 @@ private fun AiConfigTab(
             Text("Sin paciente seleccionado", color = MemoriaInk, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
             Text("Selecciona un paciente antes de ajustar el asistente.", color = MemoriaMuted)
+            if (patients.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                patients.forEach { patient ->
+                    SoftListRow(onClick = { onSelectPatient(patient) }) {
+                        Text(patient.fullName, color = MemoriaInk, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
         }
         return
     }
+    SelectedPatientConfigCard(
+        patient = selectedPatient,
+        patients = patients,
+        expanded = patientPickerOpen,
+        onToggle = { patientPickerOpen = !patientPickerOpen },
+        onSelectPatient = {
+            patientPickerOpen = false
+            onSelectPatient(it)
+        }
+    )
+    Spacer(modifier = Modifier.height(20.dp))
 
     MemoriaPanel {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1503,10 +2304,6 @@ private fun DiaryTab(
     onRefresh: () -> Unit,
     onLoadTranscript: (SessionSummary) -> Unit
 ) {
-    val visibleAlerts = activeSession?.let { session ->
-        alerts.filter { it.sessionId == session.id }
-    } ?: alerts
-
     Row(verticalAlignment = Alignment.CenterVertically) {
         ScreenHeading("Diario de Sesiones", modifier = Modifier.weight(1f))
         TextButton(onClick = onRefresh) {
@@ -1547,79 +2344,337 @@ private fun DiaryTab(
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
+}
 
-    if (activeSession != null) {
-        Spacer(modifier = Modifier.height(12.dp))
-        MemoriaPanel {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+@Composable
+private fun DiarySessionDetailScreen(
+    patient: PatientSummary?,
+    session: SessionSummary,
+    transcript: List<ConversationMessageSummary>,
+    events: List<SessionEventSummary>,
+    alerts: List<AlertSummary>,
+    modifier: Modifier = Modifier
+) {
+    val patientName = patient?.fullName ?: "Paciente"
+    val repetitiveCount = countMatching(events, alerts, "repet")
+    val redirectCount = countMatching(events, alerts, "reconduc", "tema sensible")
+    val patientMessages = transcript.count { it.sender.equals("patient", ignoreCase = true) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        SessionDetailHeader(
+            patientName = patientName,
+            session = session,
+            modifier = Modifier.widthIn(max = 640.dp)
+        )
+        if (alerts.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(20.dp))
+            SessionAlertsPanel(
+                alerts = alerts,
+                modifier = Modifier.widthIn(max = 640.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        ConversationTranscriptPanel(
+            patientName = patientDisplayName(patient),
+            transcript = transcript,
+            modifier = Modifier.widthIn(max = 640.dp)
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        SessionEventsPanel(
+            events = events,
+            session = session,
+            modifier = Modifier.widthIn(max = 640.dp)
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Row(
+            modifier = Modifier.widthIn(max = 640.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SessionStatCard(
+                value = patientMessages.toString(),
+                label = "Mensajes del paciente",
+                modifier = Modifier.weight(1f)
+            )
+            SessionStatCard(
+                value = repetitiveCount.toString(),
+                label = "Preguntas repetitivas",
+                modifier = Modifier.weight(1f)
+            )
+            SessionStatCard(
+                value = redirectCount.toString(),
+                label = "Reconducciones",
+                warning = redirectCount > 0,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionDetailHeader(patientName: String, session: SessionSummary, modifier: Modifier = Modifier) {
+    MemoriaPanel(modifier = modifier, contentPadding = PaddingValues(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BrandMark(icon = MemoriaGlyph.Person, size = 48.dp)
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Detalle de sesion",
+                    text = patientName,
                     color = MemoriaInk,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                SessionInfoRow("Estado", statusLabel(activeSession.status))
-                SessionInfoRow("Inicio", formatTimestamp(activeSession.startedAt))
-                SessionInfoRow("Fin", formatTimestamp(activeSession.endedAt))
-            }
-        }
-        if (transcript.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(14.dp))
-            MemoriaPanel {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Transcripcion", color = MemoriaInk, fontWeight = FontWeight.Bold)
-                    transcript.forEach { message ->
-                        SoftListRow {
-                            Column {
-                                Text(
-                                    text = "${senderLabel(message.sender)} - ${formatTimestamp(message.createdAt)}",
-                                    color = MemoriaMuted,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Spacer(modifier = Modifier.height(5.dp))
-                                Text(message.content, color = MemoriaInk)
-                            }
-                        }
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemoriaLineIcon(MemoriaGlyph.Calendar, MemoriaMuted, Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = formatSessionDate(session.startedAt ?: session.createdAt),
+                            color = MemoriaMuted,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemoriaLineIcon(MemoriaGlyph.Clock, MemoriaMuted, Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = formatSessionTimeRange(session),
+                            color = MemoriaMuted,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
+            Surface(
+                shape = MemoriaInnerShape,
+                color = MemoriaSagePale
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Duracion", color = MemoriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = sessionDurationLabel(session),
+                        color = MemoriaSageDark,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
-        if (events.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(14.dp))
-            MemoriaPanel {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Eventos", color = MemoriaInk, fontWeight = FontWeight.Bold)
-                    events.forEach { event ->
-                        EventBullet(
-                            color = MemoriaSage,
-                            title = event.description,
-                            time = formatTimestamp(event.createdAt).takeLast(5)
+    }
+}
+
+@Composable
+private fun SessionAlertsPanel(alerts: List<AlertSummary>, modifier: Modifier = Modifier) {
+    MemoriaPanel(
+        modifier = modifier,
+        background = MemoriaWarningPanel,
+        borderColor = Color(0xFFF6D7D1),
+        contentPadding = PaddingValues(20.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MemoriaLineIcon(MemoriaGlyph.Bell, MemoriaWarning, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Alertas de la Sesion",
+                    color = MemoriaInk,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            alerts.forEach { alert ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MemoriaInnerShape,
+                    color = Color.White.copy(alpha = 0.58f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(alert.title, color = MemoriaInk, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                            Text(alert.message, color = MemoriaMuted, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(
+                            text = formatSessionTime(alert.createdAt),
+                            color = MemoriaMuted,
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
             }
         }
     }
+}
 
-    if (visibleAlerts.isNotEmpty()) {
-        Spacer(modifier = Modifier.height(14.dp))
-        MemoriaPanel(background = MemoriaWarningPanel, borderColor = Color(0xFFF6D7D1)) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Alertas", color = MemoriaInk, fontWeight = FontWeight.Bold)
-                visibleAlerts.forEach { alert ->
-                    SoftListRow {
-                        Column {
-                            Text(
-                                text = "${alert.title} - ${formatTimestamp(alert.createdAt)}",
-                                color = MemoriaInk,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(5.dp))
-                            Text(alert.message, color = MemoriaMuted)
-                        }
-                    }
+@Composable
+private fun ConversationTranscriptPanel(
+    patientName: String,
+    transcript: List<ConversationMessageSummary>,
+    modifier: Modifier = Modifier
+) {
+    MemoriaPanel(modifier = modifier, contentPadding = PaddingValues(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = "Transcripcion de la Conversacion",
+                color = MemoriaInk,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (transcript.isEmpty()) {
+                SoftListRow {
+                    Text("No hay mensajes registrados para esta sesion.", color = MemoriaMuted)
+                }
+            } else {
+                transcript.forEach { message ->
+                    ConversationBubble(
+                        message = message,
+                        patientName = patientName
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ConversationBubble(message: ConversationMessageSummary, patientName: String) {
+    val fromPatient = message.sender.equals("patient", ignoreCase = true)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (fromPatient) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top
+    ) {
+        if (!fromPatient) {
+            ConversationAvatar(MemoriaGlyph.Brain, MemoriaSage)
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+        Column(
+            modifier = Modifier.weight(1f, fill = false),
+            horizontalAlignment = if (fromPatient) Alignment.End else Alignment.Start
+        ) {
+            Text(
+                text = "${if (fromPatient) patientName else "memorIA"}   ${formatSessionTime(message.createdAt)}",
+                color = MemoriaMuted,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 10.sp
+            )
+            Spacer(modifier = Modifier.height(5.dp))
+            Surface(
+                shape = MemoriaInnerShape,
+                color = MemoriaSagePale
+            ) {
+                Text(
+                    text = message.content,
+                    color = MemoriaInk,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
+                )
+            }
+        }
+        if (fromPatient) {
+            Spacer(modifier = Modifier.width(10.dp))
+            ConversationAvatar(MemoriaGlyph.Person, MemoriaSage)
+        }
+    }
+}
+
+@Composable
+private fun ConversationAvatar(glyph: MemoriaGlyph, color: Color) {
+    Surface(
+        modifier = Modifier.size(34.dp),
+        shape = CircleShape,
+        color = MemoriaSagePale
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            MemoriaLineIcon(glyph, color, Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun SessionEventsPanel(events: List<SessionEventSummary>, session: SessionSummary, modifier: Modifier = Modifier) {
+    MemoriaPanel(modifier = modifier, contentPadding = PaddingValues(20.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MemoriaLineIcon(MemoriaGlyph.Clock, MemoriaInk, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Eventos Detectados",
+                    color = MemoriaInk,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            SessionEventRow("Sesion iniciada", formatSessionTime(session.startedAt ?: session.createdAt), MemoriaGlyph.Play, MemoriaSage)
+            events.forEach { event ->
+                SessionEventRow(
+                    title = event.description,
+                    time = formatSessionTime(event.createdAt),
+                    glyph = eventGlyph(event.description),
+                    color = eventColor(event.description)
+                )
+            }
+            if (session.endedAt != null) {
+                SessionEventRow("Sesion finalizada", formatSessionTime(session.endedAt), MemoriaGlyph.Check, MemoriaSage)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionEventRow(title: String, time: String, glyph: MemoriaGlyph, color: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ConversationAvatar(glyph, color)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = MemoriaInk, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            Text(time, color = MemoriaMuted, style = MaterialTheme.typography.bodySmall, fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun SessionStatCard(value: String, label: String, warning: Boolean = false, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.height(70.dp),
+        shape = MemoriaInnerShape,
+        color = if (warning) MemoriaWarningPanel else MemoriaSagePale,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (warning) Color(0xFFF6D7D1) else MemoriaCardBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = value,
+                color = if (warning) MemoriaWarning else MemoriaSage,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = label,
+                color = MemoriaMuted,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 10.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2
+            )
         }
     }
 }
@@ -1695,6 +2750,99 @@ private fun formatTimestamp(value: String?): String {
         ?.removeSuffix("Z")
         ?.take(16)
         ?: "Sin fecha"
+}
+
+private fun parseDateTime(value: String?): LocalDateTime? {
+    if (value.isNullOrBlank()) {
+        return null
+    }
+    return try {
+        OffsetDateTime.parse(value).toLocalDateTime()
+    } catch (offsetException: Exception) {
+        try {
+            LocalDateTime.parse(value.removeSuffix("Z").take(19))
+        } catch (localException: Exception) {
+            null
+        }
+    }
+}
+
+private fun formatSessionDate(value: String?): String {
+    val date = parseDateTime(value) ?: return "Sin fecha"
+    val month = date.month.getDisplayName(java.time.format.TextStyle.FULL, SpanishSpainLocale)
+        .replaceFirstChar { it.uppercase(SpanishSpainLocale) }
+    return "${date.dayOfMonth} de $month de ${date.year}"
+}
+
+private fun formatSessionTime(value: String?): String {
+    return parseDateTime(value)?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "-"
+}
+
+private fun formatSessionTimeRange(session: SessionSummary): String {
+    val start = formatSessionTime(session.startedAt ?: session.createdAt)
+    val end = session.endedAt?.let { formatSessionTime(it) } ?: statusLabel(session.status)
+    return "$start - $end"
+}
+
+private fun sessionDurationLabel(session: SessionSummary): String {
+    val start = parseDateTime(session.startedAt ?: session.createdAt) ?: return "-"
+    val end = parseDateTime(session.endedAt) ?: return "-"
+    val minutes = Duration.between(start, end).toMinutes().coerceAtLeast(0)
+    return "$minutes min"
+}
+
+private fun formatRemainingTime(endAtMillis: Long?, nowMillis: Long): String {
+    if (endAtMillis == null) {
+        return "-"
+    }
+    val remainingSeconds = ((endAtMillis - nowMillis) / 1000).coerceAtLeast(0)
+    val minutes = remainingSeconds / 60
+    val seconds = remainingSeconds % 60
+    return "%02d:%02d".format(minutes, seconds)
+}
+
+private fun countMatching(
+    events: List<SessionEventSummary>,
+    alerts: List<AlertSummary>,
+    vararg terms: String
+): Int {
+    fun matches(text: String): Boolean {
+        val normalized = text.lowercase()
+        return terms.any { normalized.contains(it) }
+    }
+    return events.count { matches(it.description) } +
+        alerts.count { matches(it.title) || matches(it.message) }
+}
+
+private fun eventGlyph(description: String): MemoriaGlyph {
+    val normalized = description.lowercase()
+    return when {
+        normalized.contains("repet") -> MemoriaGlyph.Brain
+        normalized.contains("tema") || normalized.contains("alert") -> MemoriaGlyph.Bell
+        normalized.contains("reconduc") -> MemoriaGlyph.Heart
+        else -> MemoriaGlyph.Clock
+    }
+}
+
+private fun eventColor(description: String): Color {
+    val normalized = description.lowercase()
+    return when {
+        normalized.contains("tema") || normalized.contains("alert") -> MemoriaWarning
+        else -> MemoriaSage
+    }
+}
+
+private fun firstName(fullName: String): String {
+    return fullName.trim().substringBefore(" ").ifBlank { fullName.trim() }
+}
+
+private fun birthYearFromAge(age: Int): Int {
+    return Year.now().value - age
+}
+
+private fun patientDisplayName(patient: PatientSummary?): String {
+    val preferredName = patient?.preferredName?.takeIf { it.isNotBlank() }
+    return preferredName ?: patient?.fullName?.let { firstName(it) } ?: "Paciente"
 }
 
 private fun senderLabel(sender: String): String {
