@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.memoria.api.dto.AlertDto;
+import com.memoria.api.dto.CaregiverProfileDto;
 import com.memoria.api.dto.ConversationMessageDto;
 import com.memoria.api.dto.ConversationSessionDto;
 import com.memoria.api.dto.DangerousTopicDto;
@@ -15,11 +16,16 @@ import com.memoria.api.dto.PatientDto;
 import com.memoria.api.dto.SafeMemoryDto;
 import com.memoria.api.dto.SessionEventDto;
 import com.memoria.api.dto.UpsertDangerousTopicRequest;
+import com.memoria.api.dto.UpsertCaregiverProfileRequest;
 import com.memoria.api.dto.UpsertLoopRuleRequest;
 import com.memoria.api.dto.UpsertPatientRequest;
 import com.memoria.api.dto.UpsertSafeMemoryRequest;
 
 public interface MemoriaStore {
+
+    CaregiverProfileDto getOrCreateCaregiverProfile(String caregiverId, String fallbackFullName);
+
+    CaregiverProfileDto updateCaregiverProfile(String caregiverId, UpsertCaregiverProfileRequest request);
 
     List<PatientDto> listPatients(String caregiverId);
 
@@ -36,6 +42,10 @@ public interface MemoriaStore {
     PatientDeviceDto linkDevice(String code, String deviceIdentifier, String deviceName);
 
     PatientDeviceDto getActiveDeviceByIdentifier(String deviceIdentifier);
+
+    List<PatientDeviceDto> listPatientDevices(String caregiverId, UUID patientId);
+
+    void revokePatientDevice(String caregiverId, UUID patientId, UUID deviceId);
 
     List<LoopRuleDto> listLoopRules(String caregiverId, UUID patientId);
 
@@ -88,4 +98,3 @@ public interface MemoriaStore {
 
     AlertDto markAlertRead(String caregiverId, UUID alertId);
 }
-

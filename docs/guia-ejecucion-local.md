@@ -3,6 +3,7 @@
 Esta guia permite probar el flujo actual sin Supabase real. El backend usa memoria temporal por defecto, por lo que los datos se pierden al reiniciar Spring Boot.
 
 Para activar Supabase remoto, consulta `docs/configuracion-credenciales.md`.
+Para probar registro/login real, compila Android con `SUPABASE_URL` y `SUPABASE_ANON_KEY`, y arranca Spring Boot con `APP_SECURITY_ENABLED=true` y `SUPABASE_JWT_SECRET`.
 
 ## 1. Arrancar backend Spring Boot
 
@@ -69,25 +70,27 @@ Flujo:
 
 1. Abrir la app.
 2. Pulsar **Comprobar backend**.
-3. Entrar en **Modo cuidador**.
-4. Crear un paciente desde la pestana **Pacientes**.
-5. Editar el paciente y guardar cambios para comprobar el flujo CRUD.
-6. Seleccionar el paciente.
-7. Entrar en **IA** y crear:
+3. En modo local sin Supabase, pulsar **Entrar en demo local sin JWT**. Si se prueba autenticacion real, crear cuenta o iniciar sesion como cuidador.
+4. Entrar en **Modo cuidador**.
+5. Crear un paciente desde la pestana **Pacientes**.
+6. Editar el paciente y guardar cambios para comprobar el flujo CRUD.
+7. Seleccionar el paciente.
+8. Entrar en **IA** y crear:
    - Un bucle conversacional.
    - Un tema peligroso.
    - Un recuerdo seguro.
-8. Editar al menos una regla, un tema o un recuerdo y comprobar que se actualiza.
-9. Volver a **Pacientes** y generar codigo de vinculacion.
-10. Volver y entrar en **Modo paciente**.
-11. Introducir el codigo generado.
-12. Volver a **Modo cuidador** e iniciar sesion.
-13. En **Modo paciente**, actualizar estado.
-14. Hablar o escribir un mensaje.
-15. Enviar a memorIA.
-16. Revisar respuesta y alertas en el modo cuidador.
-17. Entrar en **Diario**, actualizar sesiones y abrir el detalle de la sesion.
-18. Revisar transcripcion, eventos y alertas asociadas.
+9. Editar al menos una regla, un tema o un recuerdo y comprobar que se actualiza.
+10. Volver a **Pacientes** y generar codigo de vinculacion.
+11. Volver y entrar en **Modo paciente**.
+12. Introducir el codigo generado.
+13. Volver a **Modo cuidador** e iniciar sesion.
+14. En **Modo paciente**, actualizar estado si no cambia automaticamente.
+15. Conceder permiso de microfono si Android lo solicita.
+16. Hablar con el paciente sin pulsar enviar; la app transcribe, envia el mensaje y lee la respuesta automaticamente.
+17. Revisar respuesta y alertas en el modo cuidador.
+18. Entrar en **Diario**, actualizar sesiones y abrir el detalle de la sesion.
+19. Revisar transcripcion, eventos y alertas asociadas.
+20. Volver a **Pacientes**, actualizar dispositivos y desvincular el dispositivo de prueba si se quiere demostrar el cierre del vinculo.
 
 ## 4.1 Probar notificaciones Android
 

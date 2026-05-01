@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import com.memoria.api.dto.AlertDto;
+import com.memoria.api.dto.CaregiverProfileDto;
 import com.memoria.api.dto.ConversationMessageDto;
 import com.memoria.api.dto.ConversationSessionDto;
 import com.memoria.api.dto.DangerousTopicDto;
@@ -21,6 +22,7 @@ import com.memoria.api.dto.PatientDeviceDto;
 import com.memoria.api.dto.PatientDto;
 import com.memoria.api.dto.SafeMemoryDto;
 import com.memoria.api.dto.SessionEventDto;
+import com.memoria.api.dto.UpsertCaregiverProfileRequest;
 import com.memoria.api.dto.UpsertDangerousTopicRequest;
 import com.memoria.api.dto.UpsertLoopRuleRequest;
 import com.memoria.api.dto.UpsertPatientRequest;
@@ -33,6 +35,7 @@ public class InMemoryStore implements MemoriaStore {
     private static final char[] PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    private final Map<String, CaregiverProfileDto> caregiverProfiles = new ConcurrentHashMap<>();
     private final Map<String, Map<UUID, PatientDto>> patients = new ConcurrentHashMap<>();
     private final Map<UUID, PairingCodeDto> pairingCodes = new ConcurrentHashMap<>();
     private final Map<String, PairingCodeDto> pairingCodesByCode = new ConcurrentHashMap<>();
@@ -44,6 +47,33 @@ public class InMemoryStore implements MemoriaStore {
     private final Map<UUID, ConversationMessageDto> messages = new ConcurrentHashMap<>();
     private final Map<UUID, SessionEventDto> events = new ConcurrentHashMap<>();
     private final Map<UUID, AlertDto> alerts = new ConcurrentHashMap<>();
+
+    @Override
+    public CaregiverProfileDto getOrCreateCaregiverProfile(String caregiverId, String fallbackFullName) {
+        return caregiverProfiles.computeIfAbsent(caregiverId, id -> {
+            OffsetDateTime now = OffsetDateTime.now();
+            UUID profileId = UUID.fromString(id);
+            return new CaregiverProfileDto(
+                    profileId,
+                    profileId,
+                    defaultFullName(fallbackFullName),
+                    now,
+                    now);
+        });
+    }
+
+    @Override
+    public CaregiverProfileDto updateCaregiverProfile(String caregiverId, UpsertCaregiverProfileRequest request) {
+        CaregiverProfileDto current = getOrCreateCaregiverProfile(caregiverId, request.fullName());
+        CaregiverProfileDto updated = new CaregiverProfileDto(
+                current.id(),
+                current.authUserId(),
+                defaultFullName(request.fullName()),
+                current.createdAt(),
+                OffsetDateTime.now());
+        caregiverProfiles.put(caregiverId, updated);
+        return updated;
+    }
 
     @Override
     public List<PatientDto> listPatients(String caregiverId) {
@@ -166,6 +196,34 @@ public class InMemoryStore implements MemoriaStore {
                 .filter(device -> device.revokedAt() == null)
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Patient device not linked"));
+    }
+
+    @Override
+    public List<PatientDeviceDto> listPatientDevices(String caregiverId, UUID patientId) {
+        getPatient(caregiverId, patientId);
+        return patientDevices.values().stream()
+                .filter(device -> device.caregiverId().equals(caregiverId))
+                .filter(device -> device.patientId().equals(patientId))
+                .filter(device -> device.revokedAt() == null)
+                .sorted(Comparator.comparing(PatientDeviceDto::linkedAt).reversed())
+                .toList();
+    }
+
+    @Override
+    public void revokePatientDevice(String caregiverId, UUID patientId, UUID deviceId) {
+        PatientDeviceDto current = listPatientDevices(caregiverId, patientId).stream()
+                .filter(device -> device.id().equals(deviceId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Patient device not found"));
+        PatientDeviceDto revoked = new PatientDeviceDto(
+                current.id(),
+                current.caregiverId(),
+                current.patientId(),
+                current.deviceIdentifier(),
+                current.deviceName(),
+                current.linkedAt(),
+                OffsetDateTime.now());
+        patientDevices.put(deviceId, revoked);
     }
 
     @Override
@@ -539,5 +597,9 @@ public class InMemoryStore implements MemoriaStore {
 
     private Double defaultTtsSpeed(Double ttsSpeed) {
         return ttsSpeed == null ? 1.0 : ttsSpeed;
+    }
+
+    private String defaultFullName(String fullName) {
+        return fullName == null || fullName.isBlank() ? "Cuidador" : fullName.trim();
     }
 }

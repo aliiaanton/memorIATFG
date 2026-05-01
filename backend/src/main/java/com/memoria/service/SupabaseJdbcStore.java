@@ -9,12 +9,14 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 
 import com.memoria.api.dto.AlertDto;
+import com.memoria.api.dto.CaregiverProfileDto;
 import com.memoria.api.dto.ConversationMessageDto;
 import com.memoria.api.dto.ConversationSessionDto;
 import com.memoria.api.dto.DangerousTopicDto;
@@ -24,6 +26,7 @@ import com.memoria.api.dto.PatientDeviceDto;
 import com.memoria.api.dto.PatientDto;
 import com.memoria.api.dto.SafeMemoryDto;
 import com.memoria.api.dto.SessionEventDto;
+import com.memoria.api.dto.UpsertCaregiverProfileRequest;
 import com.memoria.api.dto.UpsertDangerousTopicRequest;
 import com.memoria.api.dto.UpsertLoopRuleRequest;
 import com.memoria.api.dto.UpsertPatientRequest;
@@ -40,6 +43,29 @@ public class SupabaseJdbcStore implements MemoriaStore {
 
     public SupabaseJdbcStore(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    @Override
+    public CaregiverProfileDto getOrCreateCaregiverProfile(String caregiverId, String fallbackFullName) {
+        try {
+            return jdbc.queryForObject("""
+                    select * from public.caregiver_profiles
+                    where id = ?
+                    """, caregiverProfileMapper(), uuid(caregiverId));
+        } catch (EmptyResultDataAccessException exception) {
+            return createCaregiverProfile(caregiverId, fallbackFullName);
+        }
+    }
+
+    @Override
+    public CaregiverProfileDto updateCaregiverProfile(String caregiverId, UpsertCaregiverProfileRequest request) {
+        getOrCreateCaregiverProfile(caregiverId, request.fullName());
+        return jdbc.queryForObject("""
+                update public.caregiver_profiles
+                set full_name = ?
+                where id = ?
+                returning *
+                """, caregiverProfileMapper(), defaultFullName(request.fullName()), uuid(caregiverId));
     }
 
     @Override
@@ -150,6 +176,29 @@ public class SupabaseJdbcStore implements MemoriaStore {
                     """, deviceMapper(), deviceIdentifier);
         } catch (EmptyResultDataAccessException exception) {
             throw new NotFoundException("Patient device not linked");
+        }
+    }
+
+    @Override
+    public List<PatientDeviceDto> listPatientDevices(String caregiverId, UUID patientId) {
+        getPatient(caregiverId, patientId);
+        return jdbc.query("""
+                select * from public.patient_devices
+                where caregiver_id = ? and patient_id = ? and revoked_at is null
+                order by linked_at desc
+                """, deviceMapper(), uuid(caregiverId), patientId);
+    }
+
+    @Override
+    public void revokePatientDevice(String caregiverId, UUID patientId, UUID deviceId) {
+        getPatient(caregiverId, patientId);
+        int updated = jdbc.update("""
+                update public.patient_devices
+                set revoked_at = now()
+                where caregiver_id = ? and patient_id = ? and id = ? and revoked_at is null
+                """, uuid(caregiverId), patientId, deviceId);
+        if (updated == 0) {
+            throw new NotFoundException("Patient device not found");
         }
     }
 
@@ -427,6 +476,28 @@ public class SupabaseJdbcStore implements MemoriaStore {
                 """, uuid(caregiverId));
     }
 
+    private CaregiverProfileDto createCaregiverProfile(String caregiverId, String fallbackFullName) {
+        try {
+            return jdbc.queryForObject("""
+                    insert into public.caregiver_profiles (id, auth_user_id, full_name)
+                    values (?, ?, ?)
+                    on conflict (id) do update
+                    set auth_user_id = coalesce(public.caregiver_profiles.auth_user_id, excluded.auth_user_id),
+                        full_name = excluded.full_name
+                    returning *
+                    """, caregiverProfileMapper(), uuid(caregiverId), uuid(caregiverId),
+                    defaultFullName(fallbackFullName));
+        } catch (DataIntegrityViolationException exception) {
+            return jdbc.queryForObject("""
+                    insert into public.caregiver_profiles (id, full_name)
+                    values (?, ?)
+                    on conflict (id) do update
+                    set full_name = excluded.full_name
+                    returning *
+                    """, caregiverProfileMapper(), uuid(caregiverId), defaultFullName(fallbackFullName));
+        }
+    }
+
     private PairingCodeDto findPairingCode(String code) {
         try {
             return jdbc.queryForObject("""
@@ -493,6 +564,19 @@ public class SupabaseJdbcStore implements MemoriaStore {
 
     private Double defaultTtsSpeed(Double ttsSpeed) {
         return ttsSpeed == null ? 1.0 : ttsSpeed;
+    }
+
+    private String defaultFullName(String fullName) {
+        return fullName == null || fullName.isBlank() ? "Cuidador" : fullName.trim();
+    }
+
+    private RowMapper<CaregiverProfileDto> caregiverProfileMapper() {
+        return (rs, rowNum) -> new CaregiverProfileDto(
+                rs.getObject("id", UUID.class),
+                rs.getObject("auth_user_id", UUID.class),
+                rs.getString("full_name"),
+                offset(rs, "created_at"),
+                offset(rs, "updated_at"));
     }
 
     private RowMapper<PatientDto> patientMapper() {
@@ -622,4 +706,3 @@ public class SupabaseJdbcStore implements MemoriaStore {
         return rs.getObject(column, OffsetDateTime.class);
     }
 }
-

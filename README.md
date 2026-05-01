@@ -51,8 +51,12 @@ La idea original completa se conserva en:
 - Backend Spring Boot scaffolded y compilado.
 - Microservicio FastAPI scaffolded con Gemini y fallback local.
 - App Android Compose conectada al backend local y compilada.
+- Registro e inicio de sesion de cuidadores mediante Supabase Auth.
+- Envio de JWT desde Android y validacion en Spring Boot cuando `APP_SECURITY_ENABLED=true`.
+- Perfil basico del cuidador asociado al usuario autenticado.
 - Modo paciente con entrada por voz y TextToSpeech.
 - Modo cuidador con formularios reales para pacientes, bucles, temas peligrosos y recuerdos seguros.
+- Gestion de dispositivos paciente vinculados y desvinculacion desde modo cuidador.
 - Diario con sesiones, transcripcion, eventos y alertas por sesion.
 - Tests unitarios del backend para la logica conversacional principal.
 

@@ -12,6 +12,22 @@ http://localhost:8080/api
 
 Comprueba que el backend esta levantado.
 
+## Cuidador autenticado
+
+### GET `/me/profile`
+
+Obtiene o crea el perfil basico del cuidador autenticado.
+
+### PUT `/me/profile`
+
+Actualiza el nombre visible del cuidador.
+
+```json
+{
+  "fullName": "Ana Garcia"
+}
+```
+
 ## Pacientes
 
 ### GET `/patients`
@@ -51,6 +67,14 @@ Elimina un paciente.
 ### POST `/patients/{patientId}/pairing-codes`
 
 Genera un codigo alfanumerico para vincular el modo paciente.
+
+### GET `/patients/{patientId}/devices`
+
+Lista los dispositivos paciente vinculados y activos de un paciente.
+
+### DELETE `/patients/{patientId}/devices/{deviceId}`
+
+Desvincula un dispositivo paciente. El historico se conserva y el dispositivo deja de poder consultar la terminal.
 
 ### POST `/patient-devices/link`
 

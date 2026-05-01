@@ -347,8 +347,12 @@ El proyecto cumple los requisitos minimos indicados para el TFG porque incluye:
 
 Estado actual de implementacion:
 
+- Registro e inicio de sesion de cuidadores integrado con Supabase Auth.
+- Envio de JWT desde Android y validacion en Spring Boot cuando se activa `APP_SECURITY_ENABLED=true`.
+- Perfil basico del cuidador creado desde el backend para el usuario autenticado.
 - CRUD de pacientes y configuracion IA operativo desde Android.
 - Vinculacion por codigo operativa.
+- Gestion de dispositivos vinculados y desvinculacion desde el modo cuidador.
 - Modo paciente con voz y lectura de respuestas.
 - Alertas guardadas y visibles en el cuidador.
 - Notificaciones Android para nuevas alertas.
@@ -500,7 +504,7 @@ Criterio de exito: el MVP puede ensenarse de principio a fin y explicarse en la 
 
 Quedan pendientes para la fase final:
 
-- Revisar autenticacion real extremo a extremo entre Android, Supabase y Spring Boot.
+- Probar autenticacion real extremo a extremo con credenciales definitivas de Supabase en emulador y movil fisico.
 - Preparar despliegue final de Spring Boot y FastAPI.
 - Valorar Docker/Docker Compose para el VPS si encaja con el entorno disponible.
 - Hacer pruebas completas con emulador y, si es posible, movil fisico.

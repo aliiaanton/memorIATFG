@@ -95,6 +95,31 @@ class ConversationServiceTest {
     }
 
     @Test
+    void aiPromptFiltersBlankContextBeforeCallingAiService() {
+        PatientDto patient = createPatient();
+        UUID sessionId = createActiveSession(patient.id());
+        store.createSafeMemory(CAREGIVER_ID, patient.id(),
+                new UpsertSafeMemoryRequest("   ", "No deberia llegar al microservicio.", true));
+        store.createSafeMemory(CAREGIVER_ID, patient.id(),
+                new UpsertSafeMemoryRequest("Costura", "  Le gustaba coser por las tardes.  ", true));
+        store.createDangerousTopic(CAREGIVER_ID, patient.id(),
+                new UpsertDangerousTopicRequest("   ", "Sin termino valido.", true));
+        store.createDangerousTopic(CAREGIVER_ID, patient.id(),
+                new UpsertDangerousTopicRequest(" hospital ", "Hablar de plantas.", true));
+
+        conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("Hola, quiero hablar un rato"));
+
+        assertThat(aiClient.lastRequest().safeMemories())
+                .singleElement()
+                .satisfies(memory -> {
+                    assertThat(memory.title()).isEqualTo("Costura");
+                    assertThat(memory.content()).isEqualTo("Le gustaba coser por las tardes.");
+                });
+        assertThat(aiClient.lastRequest().dangerousTerms()).containsExactly("hospital");
+    }
+
+    @Test
     void inactiveSessionRejectsPatientMessages() {
         PatientDto patient = createPatient();
         UUID waitingSessionId = store.createSession(CAREGIVER_ID, patient.id()).id();
@@ -118,6 +143,7 @@ class ConversationServiceTest {
 
     private static final class StubAiClient extends AiClient {
         private int calls;
+        private AiPromptRequest lastRequest;
 
         private StubAiClient() {
             super(RestClient.builder(), "http://localhost:1");
@@ -126,11 +152,16 @@ class ConversationServiceTest {
         @Override
         public String generateResponse(AiPromptRequest request) {
             calls++;
+            lastRequest = request;
             return "Respuesta tranquila de prueba.";
         }
 
         int calls() {
             return calls;
+        }
+
+        AiPromptRequest lastRequest() {
+            return lastRequest;
         }
     }
 }

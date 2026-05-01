@@ -79,6 +79,7 @@ public class ConversationService {
         String normalizedText = normalize(text);
         return store.listDangerousTopics(caregiverId, patientId).stream()
                 .filter(DangerousTopicDto::active)
+                .filter(topic -> hasText(topic.term()))
                 .filter(topic -> normalizedText.contains(normalize(topic.term())))
                 .findFirst()
                 .orElse(null);
@@ -104,6 +105,7 @@ public class ConversationService {
             DangerousTopicDto dangerousTopic) {
         List<SafeMemoryDto> memories = store.listSafeMemories(caregiverId, patientId).stream()
                 .filter(SafeMemoryDto::active)
+                .filter(memory -> hasText(memory.title()) && hasText(memory.content()))
                 .toList();
         String name = patient.preferredName() == null || patient.preferredName().isBlank()
                 ? patient.fullName()
@@ -123,16 +125,27 @@ public class ConversationService {
     private AiPromptRequest buildAiPrompt(String caregiverId, UUID patientId, PatientDto patient, String text) {
         List<SafeMemoryPrompt> memories = store.listSafeMemories(caregiverId, patientId).stream()
                 .filter(SafeMemoryDto::active)
-                .map(memory -> new SafeMemoryPrompt(memory.title(), memory.content()))
+                .filter(memory -> hasText(memory.title()) && hasText(memory.content()))
+                .map(memory -> new SafeMemoryPrompt(clean(memory.title()), clean(memory.content())))
                 .toList();
         List<String> dangerousTerms = store.listDangerousTopics(caregiverId, patientId).stream()
                 .filter(DangerousTopicDto::active)
                 .map(DangerousTopicDto::term)
+                .filter(this::hasText)
+                .map(String::trim)
                 .toList();
         String name = patient.preferredName() == null || patient.preferredName().isBlank()
                 ? patient.fullName()
                 : patient.preferredName();
         return new AiPromptRequest(name, patient.notes(), text, memories, dangerousTerms);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String clean(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String normalize(String value) {

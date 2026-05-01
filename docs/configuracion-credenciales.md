@@ -64,7 +64,7 @@ Este paso crea:
 
 ## 4. Arrancar backend con Supabase
 
-Desde PowerShell, usando variables de entorno locales:
+Para una demo local sin seguridad, usando el cuidador fijo:
 
 ```powershell
 $env:APP_STORE="supabase"
@@ -82,7 +82,38 @@ Mientras `APP_SECURITY_ENABLED=false`, el backend usa un cuidador demo fijo:
 00000000-0000-0000-0000-000000000001
 ```
 
-Esto permite probar persistencia remota antes de integrar Supabase Auth en Android.
+Esto permite probar persistencia remota sin activar la validacion JWT.
+
+Para probar autenticacion real con JWT:
+
+```powershell
+$env:APP_STORE="supabase"
+$env:APP_SECURITY_ENABLED="true"
+$env:SUPABASE_JWT_SECRET="<jwt-secret-del-proyecto>"
+$env:SUPABASE_JWT_ISSUER="https://<project-id>.supabase.co/auth/v1"
+$env:SUPABASE_DB_URL="postgresql://postgres.<project-id>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require"
+$env:AI_SERVICE_BASE_URL="http://localhost:8000"
+
+cd backend
+& "C:\Program Files\JetBrains\IntelliJ IDEA 2025.2.1\plugins\maven\lib\maven3\bin\mvn.cmd" spring-boot:run
+```
+
+En este modo Android debe compilarse con `SUPABASE_URL` y `SUPABASE_ANON_KEY` para poder registrar e iniciar sesion de cuidadores.
+
+```powershell
+$env:SUPABASE_URL="https://<project-id>.supabase.co"
+$env:SUPABASE_ANON_KEY="<anon-key>"
+cd android
+.\gradlew.bat :app:assembleDebug
+```
+
+Tambien se puede dejar configurado localmente en `android/local.properties`, que esta ignorado por Git:
+
+```properties
+sdk.dir=C\:\\Users\\USUARIO\\AppData\\Local\\Android\\Sdk
+SUPABASE_URL=https://<project-id>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+```
 
 Tambien puedes duplicar el script de ejemplo:
 

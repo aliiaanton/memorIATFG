@@ -20,6 +20,13 @@ data class PairingCodeSummary(
     val code: String
 )
 
+data class PatientDeviceSummary(
+    val id: String,
+    val deviceIdentifier: String,
+    val deviceName: String?,
+    val linkedAt: String?
+)
+
 data class LoopRuleSummary(
     val id: String,
     val question: String,
@@ -82,12 +89,32 @@ data class TerminalStatus(
     val sessionStatus: String
 )
 
+data class CaregiverProfileSummary(
+    val id: String,
+    val fullName: String
+)
+
 class MemoriaApiClient(
     private val baseUrl: String = BuildConfig.BACKEND_BASE_URL
 ) {
+    @Volatile
+    private var accessToken: String? = null
+
+    fun updateAccessToken(token: String?) {
+        accessToken = token?.takeIf { it.isNotBlank() }
+    }
 
     fun health(): String {
         return JSONObject(request("GET", "/health")).getString("status")
+    }
+
+    fun saveCaregiverProfile(fullName: String): CaregiverProfileSummary {
+        val body = JSONObject().put("fullName", fullName)
+        val item = JSONObject(request("PUT", "/me/profile", body))
+        return CaregiverProfileSummary(
+            id = item.getString("id"),
+            fullName = item.getString("fullName")
+        )
     }
 
     fun listPatients(): List<PatientSummary> {
@@ -231,6 +258,23 @@ class MemoriaApiClient(
     fun createPairingCode(patientId: String): PairingCodeSummary {
         val item = JSONObject(request("POST", "/patients/$patientId/pairing-codes"))
         return PairingCodeSummary(code = item.getString("code"))
+    }
+
+    fun listPatientDevices(patientId: String): List<PatientDeviceSummary> {
+        val array = JSONArray(request("GET", "/patients/$patientId/devices"))
+        return List(array.length()) { index ->
+            val item = array.getJSONObject(index)
+            PatientDeviceSummary(
+                id = item.getString("id"),
+                deviceIdentifier = item.getString("deviceIdentifier"),
+                deviceName = nullableString(item, "deviceName"),
+                linkedAt = nullableString(item, "linkedAt")
+            )
+        }
+    }
+
+    fun unlinkPatientDevice(patientId: String, deviceId: String) {
+        request("DELETE", "/patients/$patientId/devices/$deviceId")
     }
 
     fun linkDevice(code: String, deviceIdentifier: String, deviceName: String) {
@@ -391,6 +435,9 @@ class MemoriaApiClient(
             connectTimeout = 5000
             readTimeout = 10000
             setRequestProperty("Accept", "application/json")
+            accessToken?.let { token ->
+                setRequestProperty("Authorization", "Bearer $token")
+            }
             if (body != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json")
@@ -405,16 +452,44 @@ class MemoriaApiClient(
 
         val status = connection.responseCode
         val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-        val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-            reader.readText()
+        val response = if (stream == null) {
+            ""
+        } else {
+            BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
+                reader.readText()
+            }
         }
 
         connection.disconnect()
 
         if (status !in 200..299) {
-            throw IllegalStateException(response.ifBlank { "HTTP $status" })
+            throw IllegalStateException(parseApiError(response, status))
         }
 
         return response
+    }
+
+    private fun parseApiError(response: String, status: Int): String {
+        val rawMessage = if (response.isBlank()) {
+            null
+        } else {
+            try {
+                val item = JSONObject(response)
+                nullableString(item, "message")
+                    ?: nullableString(item, "error")
+                    ?: response
+            } catch (exception: Exception) {
+                response
+            }
+        }
+
+        return when (status) {
+            400 -> rawMessage?.takeIf { it.isNotBlank() } ?: "Revisa los datos introducidos."
+            401, 403 -> "La sesion no esta activa. Inicia sesion de nuevo."
+            404 -> "No se encontro la informacion solicitada."
+            409 -> "No se pudo completar la accion con los datos actuales."
+            in 500..599 -> "El servicio no esta disponible ahora. Intentalo de nuevo en unos minutos."
+            else -> rawMessage?.takeIf { it.isNotBlank() } ?: "No se pudo completar la accion."
+        }
     }
 }

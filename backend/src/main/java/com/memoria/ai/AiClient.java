@@ -1,12 +1,17 @@
 package com.memoria.ai;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class AiClient {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AiClient.class);
 
     private final RestClient restClient;
 
@@ -25,8 +30,11 @@ public class AiClient {
             if (response != null && response.text() != null && !response.text().isBlank()) {
                 return response.text();
             }
+        } catch (RestClientResponseException exception) {
+            LOGGER.warn("AI service request failed with status {}. Response body: {}",
+                    exception.getStatusCode(), exception.getResponseBodyAsString());
         } catch (RestClientException ignored) {
-            // During early MVP development, the backend must stay usable even if the AI service is offline.
+            LOGGER.warn("AI service request failed: {}", ignored.getMessage());
         }
 
         return fallbackResponse(request.patientName());
@@ -37,4 +45,3 @@ public class AiClient {
         return "Te entiendo" + name + ". Vamos a hablar de algo tranquilo y agradable.";
     }
 }
-

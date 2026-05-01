@@ -10,6 +10,8 @@
 ## Flujo cuidador
 
 - Abrir app y comprobar backend.
+- Crear una cuenta de cuidador o iniciar sesion con una cuenta existente.
+- Confirmar que el backend acepta el JWT y crea el perfil basico del cuidador.
 - Entrar en modo cuidador.
 - Crear paciente.
 - Editar paciente y comprobar que los cambios se mantienen al actualizar.
@@ -21,6 +23,8 @@
 - Crear recuerdo seguro.
 - Editar recuerdo seguro.
 - Generar codigo de vinculacion.
+- Revisar la lista de dispositivos vinculados.
+- Desvincular un dispositivo de prueba y comprobar que deja de aparecer como activo.
 - Eliminar una regla, tema o recuerdo de prueba si se quiere demostrar el borrado.
 
 ## Flujo paciente
@@ -30,10 +34,10 @@
 - Cerrar y volver a abrir modo paciente para comprobar que recuerda el dispositivo vinculado.
 - Ver estado de espera.
 - Confirmar que cambia a sesion activa cuando el cuidador inicia sesion.
-- No enviar mensajes hasta que el estado mostrado sea `active`.
-- Enviar mensaje escrito.
-- Probar reconocimiento de voz si el emulador o movil lo permite.
-- Escuchar respuesta por TextToSpeech.
+- Confirmar que al estar en `active` pide permiso de microfono si aun no se habia concedido.
+- Hablar sin pulsar **Enviar** y comprobar que el texto se transcribe y se envia automaticamente.
+- Escuchar respuesta por TextToSpeech y comprobar que vuelve a escuchar despues de responder.
+- Usar el envio escrito solo como respaldo de prueba si el reconocimiento de voz del emulador falla.
 - Confirmar que la voz TTS suena en espanol de Espana si el dispositivo tiene esa voz instalada.
 
 ## Conversacion y alertas

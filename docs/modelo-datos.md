@@ -142,3 +142,5 @@ Las tablas candidatas para suscripcion en tiempo real son:
 - `alerts`
 
 El cuidador escuchara cambios de estas tablas para actualizar el estado de sesion, mostrar banners y disparar notificaciones Android.
+
+En la implementacion Android actual, el MVP usa refresco periodico corto sobre la API REST para estado de sesion y alertas. Esto mantiene la demo funcional sin acoplar la app al canal Realtime de Supabase; la sustitucion por suscripciones Realtime queda como mejora directa si el tiempo de despliegue lo permite.

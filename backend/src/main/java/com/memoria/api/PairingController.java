@@ -1,9 +1,12 @@
 package com.memoria.api;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,5 +43,16 @@ public class PairingController {
     public ResponseEntity<PatientDeviceDto> linkDevice(@Valid @RequestBody LinkDeviceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(store.linkDevice(request.code(), request.deviceIdentifier(), request.deviceName()));
+    }
+
+    @GetMapping("/patients/{patientId}/devices")
+    public List<PatientDeviceDto> listDevices(@PathVariable UUID patientId) {
+        return store.listPatientDevices(currentUserProvider.caregiverId(), patientId);
+    }
+
+    @DeleteMapping("/patients/{patientId}/devices/{deviceId}")
+    public ResponseEntity<Void> revokeDevice(@PathVariable UUID patientId, @PathVariable UUID deviceId) {
+        store.revokePatientDevice(currentUserProvider.caregiverId(), patientId, deviceId);
+        return ResponseEntity.noContent().build();
     }
 }
