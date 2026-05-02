@@ -17,6 +17,7 @@ La idea original completa se conserva en:
 ├── android/      # Aplicacion Android nativa en Kotlin + Jetpack Compose
 ├── backend/      # Backend principal en Java + Spring Boot
 ├── ai-service/   # Microservicio IA en Python + FastAPI + Gemini API
+├── web/          # Web responsive en React + Vite + TypeScript
 ├── docs/         # Documentacion auxiliar del proyecto
 ├── .env.example  # Variables de entorno de referencia
 └── .gitignore
@@ -25,6 +26,7 @@ La idea original completa se conserva en:
 ## Stack previsto
 
 - Android: Kotlin, Jetpack Compose, Material 3, SpeechRecognizer y TextToSpeech.
+- Web: React, Vite y TypeScript.
 - Backend principal: Java y Spring Boot.
 - Servicio IA: Python, FastAPI y Google Gemini API.
 - Base de datos, autenticacion y tiempo real: Supabase.
@@ -58,6 +60,7 @@ La idea original completa se conserva en:
 - Modo cuidador con formularios reales para pacientes, bucles, temas peligrosos y recuerdos seguros.
 - Gestion de dispositivos paciente vinculados y desvinculacion desde modo cuidador.
 - Diario con sesiones, transcripcion, eventos y alertas por sesion.
+- Web publica y panel responsive para cuidadores.
 - Tests unitarios del backend para la logica conversacional principal.
 
 ## Probar localmente

@@ -16,5 +16,6 @@ Documentos previstos:
 - [Guia de ejecucion local](guia-ejecucion-local.md).
 - [Configuracion de credenciales](configuracion-credenciales.md).
 - [Guia de despliegue](despliegue.md).
+- [Modulo de estimulacion cognitiva](modulo-estimulacion-cognitiva.md).
 - [Checklist de pruebas del MVP](checklist-pruebas-mvp.md).
 - [Base para la memoria del TFG](memoria-tfg-base.md).

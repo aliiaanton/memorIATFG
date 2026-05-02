@@ -33,6 +33,15 @@ android/captures/
 android/.externalNativeBuild/
 android/.cxx/
 
+# Web / Vite
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/**/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
+web/.vite/
+
 # Python / FastAPI
 ai-service/.venv/
 ai-service/venv/

@@ -102,6 +102,11 @@ private enum class PatientsView {
 }
 
 private val SpanishSpainLocale: Locale = Locale.forLanguageTag("es-ES")
+private const val VoiceCompleteSilenceMillis = 8000L
+private const val VoicePossiblyCompleteSilenceMillis = 5000L
+private const val VoiceMinimumListeningMillis = 2500L
+private const val VoiceAutoRestartDelayMillis = 1200L
+private const val VoiceSilenceMarker = "[silencio prolongado]"
 
 @Composable
 fun MemoriaApp() {
@@ -561,8 +566,16 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
         val current = patient ?: return
         runAsync(
             action = { api.listPatientDevices(current.id) },
-            onSuccess = { patientDevices = it },
-            onError = { statusMessage = "Error cargando dispositivos: $it" }
+            onSuccess = {
+                if (selectedPatient?.id == current.id) {
+                    patientDevices = it
+                }
+            },
+            onError = {
+                if (selectedPatient?.id == current.id) {
+                    statusMessage = "Error cargando dispositivos: $it"
+                }
+            }
         )
     }
 
@@ -612,12 +625,18 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                 )
             },
             onSuccess = {
-                loopRules = it.first
-                dangerousTopics = it.second
-                safeMemories = it.third
-                statusMessage = "Ajustes del asistente actualizados."
+                if (selectedPatient?.id == current.id) {
+                    loopRules = it.first
+                    dangerousTopics = it.second
+                    safeMemories = it.third
+                    statusMessage = "Ajustes del asistente actualizados para ${current.fullName}."
+                }
             },
-            onError = { statusMessage = "Error cargando ajustes del asistente: $it" }
+            onError = {
+                if (selectedPatient?.id == current.id) {
+                    statusMessage = "Error cargando ajustes del asistente: $it"
+                }
+            }
         )
     }
 
@@ -626,13 +645,15 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
         runAsync(
             action = { api.listSessions(current.id) },
             onSuccess = {
-                sessions = it
-                if (updateStatus) {
-                    statusMessage = "Diario actualizado."
+                if (selectedPatient?.id == current.id) {
+                    sessions = it
+                    if (updateStatus) {
+                        statusMessage = "Diario actualizado."
+                    }
                 }
             },
             onError = {
-                if (updateStatus) {
+                if (updateStatus && selectedPatient?.id == current.id) {
                     statusMessage = "Error cargando sesiones: $it"
                 }
             }
@@ -663,9 +684,29 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
     }
 
     LaunchedEffect(selectedPatient?.id) {
+        val currentPatient = selectedPatient
+        pairingCode = ""
+        loopRules = emptyList()
+        dangerousTopics = emptyList()
+        safeMemories = emptyList()
+        patientDevices = emptyList()
+        sessions = emptyList()
+        transcript = emptyList()
+        events = emptyList()
+
+        if (currentPatient == null) {
+            activeSession = null
+            activeSessionEndsAtMillis = null
+        } else {
+            statusMessage = "Cargando datos de ${currentPatient.fullName}..."
+            refreshAiConfig(currentPatient)
+            refreshPatientDevices(currentPatient)
+            refreshSessions(currentPatient, updateStatus = false)
+        }
+
         while (true) {
             refreshAlerts(updateStatus = false)
-            refreshSessions(updateStatus = false)
+            currentPatient?.let { refreshSessions(it, updateStatus = false) }
             delay(5000)
         }
     }
@@ -784,9 +825,6 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                             statusMessage = "Paciente creado."
                             patientsView = PatientsView.Created.name
                             refreshPatients()
-                            refreshAiConfig(it)
-                            refreshSessions(it)
-                            refreshPatientDevices(it)
                         },
                         onError = { statusMessage = "Error creando paciente: $it" }
                     )
@@ -845,9 +883,6 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     patientsView = PatientsView.List.name
                     selectedTab = 2
                     statusMessage = "Configura la IA de ${patient.fullName}."
-                    refreshAiConfig(patient)
-                    refreshSessions(patient)
-                    refreshPatientDevices(patient)
                 },
                 onBackToPatients = {
                     patientsView = PatientsView.List.name
@@ -950,10 +985,6 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     statusMessage = statusMessage,
                     onSelectPatient = {
                         selectedPatient = it
-                        pairingCode = ""
-                        refreshAiConfig(it)
-                        refreshSessions(it)
-                        refreshPatientDevices(it)
                     },
                     onNewPatient = {
                         patientsView = PatientsView.New.name
@@ -1022,10 +1053,6 @@ private fun CaregiverShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     safeMemories = safeMemories,
                     onSelectPatient = {
                         selectedPatient = it
-                        pairingCode = ""
-                        refreshAiConfig(it)
-                        refreshSessions(it)
-                        refreshPatientDevices(it)
                     },
                     onRefresh = { refreshAiConfig() },
                     onCreateLoopRule = { question, answer ->
@@ -2948,9 +2975,12 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, VoiceCompleteSilenceMillis)
+            putExtra(
+                RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+                VoicePossiblyCompleteSilenceMillis
+            )
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, VoiceMinimumListeningMillis)
         }
     }
 
@@ -3074,11 +3104,19 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
 
             override fun onError(error: Int) {
                 isListening = false
-                statusMessage = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH,
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No he entendido nada. Vuelvo a escuchar."
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permiso de microfono denegado."
-                    else -> "Reconocimiento interrumpido. Vuelvo a escuchar."
+                if (
+                    (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) &&
+                    status?.sessionStatus == "active" &&
+                    !isSending &&
+                    !isSpeaking
+                ) {
+                    statusMessage = "Silencio detectado. Respondo con calma."
+                    sendRecognizedMessage(VoiceSilenceMarker)
+                } else {
+                    statusMessage = when (error) {
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Permiso de microfono denegado."
+                        else -> "Reconocimiento interrumpido. Vuelvo a escuchar."
+                    }
                 }
             }
 
@@ -3089,7 +3127,8 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
                     ?.firstOrNull()
                     .orEmpty()
                 if (recognizedText.isBlank()) {
-                    statusMessage = "No he entendido nada. Vuelvo a escuchar."
+                    statusMessage = "Silencio detectado. Respondo con calma."
+                    sendRecognizedMessage(VoiceSilenceMarker)
                     return
                 }
                 sendRecognizedMessage(recognizedText)
@@ -3175,7 +3214,7 @@ private fun PatientShell(api: MemoriaApiClient, onBack: () -> Unit) {
             return@LaunchedEffect
         }
         if (microphonePermissionGranted && !isListening && !isSending && !isSpeaking) {
-            delay(900)
+            delay(VoiceAutoRestartDelayMillis)
             startVoiceInput()
         }
     }

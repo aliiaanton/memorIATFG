@@ -18,16 +18,21 @@ import com.memoria.api.dto.LoopRuleDto;
 import com.memoria.api.dto.PatientDto;
 import com.memoria.api.dto.PatientMessageRequest;
 import com.memoria.api.dto.SafeMemoryDto;
+import com.memoria.cognitive.CognitiveStimulationService;
+import com.memoria.cognitive.CognitiveTurnResponse;
 
 @Service
 public class ConversationService {
 
     private final MemoriaStore store;
     private final AiClient aiClient;
+    private final CognitiveStimulationService cognitiveStimulationService;
 
-    public ConversationService(MemoriaStore store, AiClient aiClient) {
+    public ConversationService(MemoriaStore store, AiClient aiClient,
+            CognitiveStimulationService cognitiveStimulationService) {
         this.store = store;
         this.aiClient = aiClient;
+        this.cognitiveStimulationService = cognitiveStimulationService;
     }
 
     public ConversationResponseDto handlePatientMessage(String caregiverId, UUID sessionId,
@@ -39,11 +44,13 @@ public class ConversationService {
 
         UUID patientId = session.patientId();
         PatientDto patient = store.getPatient(caregiverId, patientId);
+        List<ConversationMessageDto> previousMessages = store.listMessages(caregiverId, sessionId);
         ConversationMessageDto patientMessage = store.addMessage(caregiverId, patientId, sessionId, "patient",
                 request.text());
 
         DangerousTopicDto dangerousTopic = findDangerousTopic(caregiverId, patientId, request.text());
         if (dangerousTopic != null) {
+            cognitiveStimulationService.clearSession(sessionId);
             String response = dangerousTopicResponse(caregiverId, patientId, patient, dangerousTopic);
             ConversationMessageDto responseMessage = store.addMessage(caregiverId, patientId, sessionId, "rule",
                     response);
@@ -53,6 +60,27 @@ public class ConversationService {
                     "Tema delicado detectado", "El paciente ha mencionado: " + dangerousTopic.term());
             return new ConversationResponseDto(sessionId, patientMessage.id(), responseMessage.id(), response,
                     "dangerous_topic", true);
+        }
+
+        var activeGameResponse = cognitiveStimulationService.handleActiveGame(sessionId, request.text());
+        if (activeGameResponse.isPresent()) {
+            return saveCognitiveResponse(caregiverId, patientId, sessionId, patientMessage.id(),
+                    activeGameResponse.get());
+        }
+
+        var silenceResponse = cognitiveStimulationService.handleSilenceWithoutActiveGame(request.text());
+        if (silenceResponse.isPresent()) {
+            return saveCognitiveResponse(caregiverId, patientId, sessionId, patientMessage.id(),
+                    silenceResponse.get());
+        }
+
+        if (cognitiveStimulationService.isRepetitionLoop(request.text(), previousMessages)) {
+            var circuitBreakerResponse = cognitiveStimulationService.maybeStartCircuitBreaker(sessionId, request.text(),
+                    previousMessages);
+            if (circuitBreakerResponse.isPresent()) {
+                return saveCognitiveResponse(caregiverId, patientId, sessionId, patientMessage.id(),
+                        circuitBreakerResponse.get());
+            }
         }
 
         LoopRuleDto loopRule = findLoopRule(caregiverId, patientId, request.text());
@@ -67,12 +95,40 @@ public class ConversationService {
                     loopRule.answer(), "loop_rule", true);
         }
 
+        var circuitBreakerResponse = cognitiveStimulationService.maybeStartCircuitBreaker(sessionId, request.text(),
+                previousMessages);
+        if (circuitBreakerResponse.isPresent()) {
+            return saveCognitiveResponse(caregiverId, patientId, sessionId, patientMessage.id(),
+                    circuitBreakerResponse.get());
+        }
+
+        var stimulationResponse = cognitiveStimulationService.maybeStartStimulation(sessionId, request.text());
+        if (stimulationResponse.isPresent()) {
+            return saveCognitiveResponse(caregiverId, patientId, sessionId, patientMessage.id(),
+                    stimulationResponse.get());
+        }
+
         String aiResponse = aiClient.generateResponse(buildAiPrompt(caregiverId, patientId, patient, request.text()));
         ConversationMessageDto responseMessage = store.addMessage(caregiverId, patientId, sessionId, "ai", aiResponse);
         store.addEvent(caregiverId, patientId, sessionId, "ai_response",
                 "Respuesta generada por IA", Map.of());
         return new ConversationResponseDto(sessionId, patientMessage.id(), responseMessage.id(), aiResponse, "ai",
                 false);
+    }
+
+    private ConversationResponseDto saveCognitiveResponse(String caregiverId, UUID patientId, UUID sessionId,
+            UUID patientMessageId, CognitiveTurnResponse cognitiveResponse) {
+        ConversationMessageDto responseMessage = store.addMessage(caregiverId, patientId, sessionId, "cognitive",
+                cognitiveResponse.responseText());
+        store.addEvent(caregiverId, patientId, sessionId, "cognitive_stimulation",
+                "Modulo de estimulacion cognitiva",
+                Map.of(
+                        "trigger", cognitiveResponse.trigger().name(),
+                        "gameType", cognitiveResponse.gameType() == null ? "" : cognitiveResponse.gameType().name(),
+                        "startedGame", cognitiveResponse.startedGame(),
+                        "completedGame", cognitiveResponse.completedGame()));
+        return new ConversationResponseDto(sessionId, patientMessageId, responseMessage.id(),
+                cognitiveResponse.responseText(), "cognitive_stimulation", false);
     }
 
     private DangerousTopicDto findDangerousTopic(String caregiverId, UUID patientId, String text) {

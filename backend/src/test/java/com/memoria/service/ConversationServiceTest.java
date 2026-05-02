@@ -17,6 +17,7 @@ import com.memoria.api.dto.UpsertDangerousTopicRequest;
 import com.memoria.api.dto.UpsertLoopRuleRequest;
 import com.memoria.api.dto.UpsertPatientRequest;
 import com.memoria.api.dto.UpsertSafeMemoryRequest;
+import com.memoria.cognitive.CognitiveStimulationService;
 
 class ConversationServiceTest {
 
@@ -30,7 +31,7 @@ class ConversationServiceTest {
     void setUp() {
         store = new InMemoryStore();
         aiClient = new StubAiClient();
-        conversationService = new ConversationService(store, aiClient);
+        conversationService = new ConversationService(store, aiClient, new CognitiveStimulationService());
     }
 
     @Test
@@ -71,7 +72,7 @@ class ConversationServiceTest {
         assertThat(response.responseText()).isEqualTo("Maria esta cerca, no te preocupes.");
         assertThat(store.listMessages(CAREGIVER_ID, sessionId))
                 .extracting(message -> message.sender())
-                .containsExactly("patient", "rule");
+                .containsExactlyInAnyOrder("patient", "rule");
         assertThat(aiClient.calls()).isZero();
     }
 
@@ -90,7 +91,7 @@ class ConversationServiceTest {
         assertThat(response.responseText()).isEqualTo("Respuesta tranquila de prueba.");
         assertThat(store.listMessages(CAREGIVER_ID, sessionId))
                 .extracting(message -> message.sender())
-                .containsExactly("patient", "ai");
+                .containsExactlyInAnyOrder("patient", "ai");
         assertThat(aiClient.calls()).isEqualTo(1);
     }
 
@@ -117,6 +118,74 @@ class ConversationServiceTest {
                     assertThat(memory.content()).isEqualTo("Le gustaba coser por las tardes.");
                 });
         assertThat(aiClient.lastRequest().dangerousTerms()).containsExactly("hospital");
+    }
+
+    @Test
+    void positiveMoodStartsCognitiveStimulationGame() {
+        PatientDto patient = createPatient();
+        UUID sessionId = createActiveSession(patient.id());
+
+        var response = conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("Estoy tranquila y bien"));
+
+        assertThat(response.source()).isEqualTo("cognitive_stimulation");
+        assertThat(response.responseText()).isEqualTo("Completemos un refran: A quien madruga...");
+        assertThat(aiClient.calls()).isZero();
+        assertThat(store.listEvents(CAREGIVER_ID, sessionId))
+                .anySatisfy(event -> {
+                    assertThat(event.eventType()).isEqualTo("cognitive_stimulation");
+                    assertThat(event.metadata()).containsEntry("trigger", "STIMULATION");
+                    assertThat(event.metadata()).containsEntry("gameType", "COMPLETE_PROVERB");
+                });
+    }
+
+    @Test
+    void activeGameUsesErrorlessLearningWhenAnswerDoesNotMatch() {
+        PatientDto patient = createPatient();
+        UUID sessionId = createActiveSession(patient.id());
+        conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("Estoy tranquila y bien"));
+
+        var response = conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("patata"));
+
+        assertThat(response.source()).isEqualTo("cognitive_stimulation");
+        assertThat(response.responseText()).isEqualTo("¡Casi! Yo pensaba en: Dios le ayuda.");
+        assertThat(response.responseText().toLowerCase()).doesNotContain("incorrecto", "equivocaste");
+        assertThat(store.listMessages(CAREGIVER_ID, sessionId))
+                .extracting(message -> message.sender())
+                .containsExactlyInAnyOrder("patient", "patient", "cognitive", "cognitive");
+    }
+
+    @Test
+    void repeatedIdeaStartsMusicalCircuitBreakerBeforeLoopRules() {
+        PatientDto patient = createPatient();
+        UUID sessionId = createActiveSession(patient.id());
+        store.createLoopRule(CAREGIVER_ID, patient.id(),
+                new UpsertLoopRuleRequest("quiero mi chaqueta", "La chaqueta esta guardada.", true));
+
+        var firstResponse = conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("quiero mi chaqueta"));
+        var secondResponse = conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("quiero mi chaqueta"));
+
+        assertThat(firstResponse.source()).isEqualTo("loop_rule");
+        assertThat(secondResponse.source()).isEqualTo("cognitive_stimulation");
+        assertThat(secondResponse.responseText()).isEqualTo("Cantemos: Que llueva, que llueva...");
+    }
+
+    @Test
+    void prolongedSilenceCompletesActiveGameGently() {
+        PatientDto patient = createPatient();
+        UUID sessionId = createActiveSession(patient.id());
+        conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest("Estoy tranquila y bien"));
+
+        var response = conversationService.handlePatientMessage(CAREGIVER_ID, sessionId,
+                new PatientMessageRequest(CognitiveStimulationService.SILENCE_MARKER));
+
+        assertThat(response.source()).isEqualTo("cognitive_stimulation");
+        assertThat(response.responseText()).isEqualTo("¡Casi! Yo pensaba en: Dios le ayuda.");
     }
 
     @Test

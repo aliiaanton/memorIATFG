@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from typing import Any, List
 
 from dotenv import load_dotenv
@@ -14,6 +15,28 @@ load_dotenv()
 APP_NAME = "memorIA AI Service"
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 LOGGER = logging.getLogger("memoria-ai-service")
+PROHIBITED_PATIENT_PATTERNS = [
+    re.compile(r"\bno\b", re.IGNORECASE),
+    re.compile(r"\bincorrecto\b", re.IGNORECASE),
+    re.compile(r"te equivocaste", re.IGNORECASE),
+    re.compile(r"vuelve a intentarlo", re.IGNORECASE),
+]
+
+SYSTEM_INSTRUCTIONS = """
+Eres memorIA, una voz terapeutica, calmada y validante para una persona vulnerable.
+
+Principios:
+- Prioriza seguridad emocional, dignidad y sensacion de logro.
+- Usa aprendizaje sin errores: valida, acompana y modela la respuesta.
+- Evita negaciones directas, correcciones duras y juicios de fallo.
+- Si la persona falla, duda o calla, asume el peso conversacional.
+- Ofrece la respuesta como aportacion propia y manten tono afectuoso.
+- Usa frases claras, concretas y cortas.
+- Cada frase dirigida al paciente debe tener menos de 15 palabras.
+- Evita consejo medico, diagnosticos y confrontacion.
+- Redirige con suavidad hacia recuerdos seguros o actividades sencillas.
+- Si hay ansiedad, usa musica, refranes o recuerdos familiares.
+""".strip()
 
 app = FastAPI(title=APP_NAME, version="0.1.0")
 
@@ -123,6 +146,7 @@ def generate_response(request: GenerateResponseRequest) -> GenerateResponseRespo
         text = (response.text or "").strip()
         if not text:
             text = fallback_response(request)
+        text = ensure_safe_patient_text(text, request)
         return GenerateResponseResponse(text=text, provider="gemini", model=DEFAULT_MODEL)
     except Exception:
         return GenerateResponseResponse(
@@ -134,19 +158,12 @@ def generate_response(request: GenerateResponseRequest) -> GenerateResponseRespo
 
 def build_prompt(request: GenerateResponseRequest) -> str:
     name = request.patientName or "la persona"
-    notes = request.patientNotes or "No hay notas adicionales."
+    notes = request.patientNotes or "Sin notas adicionales."
     memories = format_memories(request.safeMemories)
     dangerous_terms = format_terms(request.dangerousTerms)
 
     return f"""
-Eres memorIA, un asistente conversacional de apoyo para una persona con deterioro cognitivo.
-
-Objetivo:
-- Responder con calma, empatia y frases breves.
-- No discutir ni corregir bruscamente.
-- No dar consejo medico.
-- Evitar temas delicados.
-- Redirigir suavemente hacia recuerdos seguros cuando sea posible.
+{SYSTEM_INSTRUCTIONS}
 
 Paciente:
 - Nombre: {name}
@@ -159,23 +176,33 @@ Recuerdos o temas seguros que puedes usar:
 {memories}
 
 Mensaje del paciente:
-{request.message or "No se ha recibido un mensaje claro."}
+{request.message or "Mensaje poco claro."}
 
-Responde en espanol, con 1 o 2 frases como maximo.
+Responde en espanol, con una o dos frases.
 """.strip()
 
 
 def format_memories(memories: List[SafeMemory]) -> str:
     if not memories:
-        return "- No hay recuerdos seguros configurados."
+        return "- Sin recuerdos seguros configurados."
     return "\n".join(f"- {memory.title}: {memory.content}" for memory in memories)
 
 
 def format_terms(terms: List[str]) -> str:
     clean_terms = [term for term in terms if term.strip()]
     if not clean_terms:
-        return "- No hay temas peligrosos configurados."
+        return "- Sin temas delicados configurados."
     return "\n".join(f"- {term}" for term in clean_terms)
+
+
+def ensure_safe_patient_text(text: str, request: GenerateResponseRequest) -> str:
+    if contains_prohibited_patient_language(text):
+        return fallback_response(request)
+    return text
+
+
+def contains_prohibited_patient_language(text: str) -> bool:
+    return any(pattern.search(text) for pattern in PROHIBITED_PATIENT_PATTERNS)
 
 
 def fallback_response(request: GenerateResponseRequest) -> str:
